@@ -22,7 +22,8 @@ Eight textured planets orbit a light-emitting Sun against a procedurally generat
 
 ## Tech stack
 
-Vanilla JavaScript, [Three.js](https://threejs.org/), [Vite](https://vitejs.dev/), WebGL, HTML5, CSS3. No framework, no UI library.
+Vanilla JavaScript, [Three.js](https://threejs.org/), [Vite](https://vitejs.dev/), WebGL, HTML5, CSS3.
+No framework, no UI library.
 
 ## How it works
 
