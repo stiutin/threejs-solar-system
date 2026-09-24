@@ -1,24 +1,58 @@
 {
   "name": "threejs-solar-system",
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "An interactive 3D solar system in the browser: textured planets, orbits, a star field and camera focus. Three.js and vanilla JavaScript.",
+  "license": "MIT",
+  "author": "Serge Tiutin",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stiutin/threejs-solar-system.git"
+  },
+  "homepage": "https://stiutin.github.io/threejs-solar-system/",
+  "keywords": [
+    "threejs",
+    "webgl",
+    "3d",
+    "solar-system",
+    "javascript",
+    "vite",
+    "portfolio"
+  ],
   "private": true,
   "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+  "engines": {
+    "node": ">=22.22.3"
   },
-  "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "eslint": "^10.11.0",
-    "globals": "^17.12.0",
-    "prettier": "^3.9.8",
-    "vite": "^8.3.0"
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "serve": "vite preview",
+    "e2e": "npm run build && playwright test",
+    "e2e:run": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:install": "playwright install chromium",
+    "screenshots": "node scripts/screenshots.mjs",
+    "lint": "eslint . && stylelint \"src/**/*.css\"",
+    "lint:fix": "eslint . --fix && stylelint \"src/**/*.css\" --fix",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "npm run format:check && npm run lint"
   },
   "dependencies": {
     "three": "^0.186.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-simple-import-sort": "^14.0.0",
+    "eslint-plugin-unused-imports": "^4.4.1",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.9",
+    "stylelint": "^17.15.0",
+    "stylelint-config-standard": "^40.0.0",
+    "stylelint-order": "^8.1.1",
+    "vite": "^8.3.0"
   }
 }

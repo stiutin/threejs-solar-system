@@ -6,6 +6,11 @@ Eight textured planets orbit a light-emitting Sun against a procedurally generat
 
 **[Open the live demo](https://stiutin.github.io/threejs-solar-system/)**
 
+<p align="center">
+  <img src=".github/screenshots/desktop.png" width="49%" alt="The whole solar system with the control panel" />
+  <img src=".github/screenshots/saturn.png" width="49%" alt="The camera focused on Saturn and its rings" />
+</p>
+
 ## Features
 
 - Eight planets with individual textures, sizes, orbital distances and rotation speeds
@@ -23,7 +28,7 @@ Eight textured planets orbit a light-emitting Sun against a procedurally generat
 ## Tech stack
 
 Vanilla JavaScript, [Three.js](https://threejs.org/), [Vite](https://vitejs.dev/), WebGL, HTML5, CSS3.
-No framework, no UI library.
+No framework, no UI library. Tested with [Playwright](https://playwright.dev/).
 
 ## How it works
 
@@ -61,6 +66,14 @@ The render loop uses `renderer.setAnimationLoop()`, which lets the browser pause
 
 The control panel is generated in JavaScript, appended to the body and styled with plain CSS. Planet buttons are built from the same `CONFIG.planets` object that builds the scene, so adding a planet to the config adds it to the UI automatically. Focusing a planet reads its world position and moves both the camera and the orbit-controls target toward it.
 
+## Testing
+
+| Layer      | Tool       | What it covers                                                                                |
+| ---------- | ---------- | --------------------------------------------------------------------------------------------- |
+| End-to-end | Playwright | the production build on desktop and mobile: loads without errors, controls work - 3 scenarios |
+
+WebGL output is hard to assert pixel by pixel, so the tests check behaviour instead: no uncaught errors or console messages, the canvas appears, and the controls do what they say. CI runs the suite against the exact build it deploys.
+
 ## Project structure
 
 ```
@@ -69,47 +82,55 @@ src/
 └── style.css        # UI and responsive styles
 
 public/
-└── textures/        # planet textures, served as static assets
+└── textures/        # planet textures (WebP), served as static assets
 
-.github/workflows/
-└── deploy.yml       # build and deploy to GitHub Pages
+e2e/                 # Playwright smoke tests
+scripts/             # README screenshots
+.github/workflows/   # CI: lint, build, smoke tests, deploy to GitHub Pages
 ```
 
 ## Asset loading
 
-Textures live in `public/` and are copied into the build untouched. Because the site is deployed as a GitHub Pages project site under a sub-path, texture URLs are resolved against Vite's base URL:
+Textures live in `public/` and are copied into the build untouched. The site is a GitHub Pages project site, served under a sub-path, so texture URLs are resolved against Vite's base URL:
 
 ```js
 const BASE_URL = import.meta.env.BASE_URL;
-const earthTexture = `${BASE_URL}textures/earth/earth_day.jpg`;
+const earthTexture = `${BASE_URL}textures/earth/earth_day.webp`;
 ```
 
-The same code then works both at `/` locally and at `/threejs-solar-system/` in production.
+With a relative `base` in `vite.config.js`, the same code works at `/` locally and at `/threejs-solar-system/` in production.
 
 ## Running locally
+
+Requires Node 22.22.3 or newer (see `.nvmrc`).
 
 ```bash
 git clone https://github.com/stiutin/threejs-solar-system.git
 cd threejs-solar-system
-npm install
-npm run dev
+npm ci
+npm start
 ```
 
-Production build and local preview:
+Other scripts:
 
 ```bash
-npm run build
-npm run preview
+npm run build          # production build into dist/
+npm run serve          # serve the production build
+npm run e2e            # build, then the Playwright smoke tests (run `npm run e2e:install` once)
+npm run screenshots    # regenerate the README screenshots
+npm run lint           # ESLint and Stylelint
+npm run format         # Prettier
+npm run check          # formatting and lint, as in CI
 ```
+
+Working on the project with an AI assistant? [`CLAUDE.md`](CLAUDE.md) has the full context.
 
 ## Deployment
 
-Every push to `master` triggers a GitHub Actions workflow that runs `npm ci`, builds with Vite and publishes `dist/` to GitHub Pages.
+Pushing to `master` runs formatting and lint, then builds the site and runs the Playwright smoke tests against that build. Only when they pass is the same build published to GitHub Pages. Vite uses a relative `base`, so the files work under `/threejs-solar-system/` without any configuration.
 
 ## Roadmap
 
-- [ ] Compress and downscale textures (currently ~6 MB of 2048×1024 JPGs)
-- [ ] Loading progress indicator while textures are fetched
 - [ ] Camera that keeps tracking a focused planet as it orbits
 - [ ] Click planets directly in the scene with a `Raycaster`
 - [ ] Planet labels rendered over the canvas
@@ -131,6 +152,4 @@ the textures remain under CC BY 4.0 as noted above.
 
 ## Author
 
-**Serge Tiutin** — [github.com/stiutin](https://github.com/stiutin)
-
-Built to get hands-on experience with real-time 3D rendering on the web.
+**Serge Tiutin** - [github.com/stiutin](https://github.com/stiutin)

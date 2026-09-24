@@ -1,7 +1,8 @@
 import './style.css';
+
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import WebGL from 'three/addons/capabilities/WebGL.js';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 
 const BASE_URL = import.meta.env.BASE_URL;
 
@@ -187,10 +188,7 @@ const textureLoader = new THREE.TextureLoader(loadingManager);
 let uiElements = null;
 
 function countTextures() {
-  return Object.values(TEXTURES).reduce(
-    (total, entry) => total + Object.keys(entry).length,
-    0,
-  );
+  return Object.values(TEXTURES).reduce((total, entry) => total + Object.keys(entry).length, 0);
 }
 
 function createLoadingManager() {
@@ -225,8 +223,7 @@ function showUnsupportedMessage() {
 
   if (track) track.remove();
   if (status) {
-    status.textContent =
-      'This browser or device does not support WebGL 2, which the scene needs to render.';
+    status.textContent = 'This browser or device does not support WebGL 2, which the scene needs to render.';
     status.classList.add('loader__status--error');
   }
 }
@@ -246,11 +243,7 @@ function createScene() {
   const scene = new THREE.Scene();
 
   scene.background = new THREE.Color(CONFIG.scene.background);
-  scene.fog = new THREE.Fog(
-    CONFIG.scene.fogColor,
-    CONFIG.scene.fogNear,
-    CONFIG.scene.fogFar,
-  );
+  scene.fog = new THREE.Fog(CONFIG.scene.fogColor, CONFIG.scene.fogNear, CONFIG.scene.fogFar);
 
   return scene;
 }
@@ -260,7 +253,7 @@ function createCamera() {
     CONFIG.camera.fov,
     window.innerWidth / window.innerHeight,
     CONFIG.camera.near,
-    CONFIG.camera.far,
+    CONFIG.camera.far
   );
 
   camera.position.copy(CONFIG.camera.position);
@@ -307,17 +300,8 @@ function loadTexture(path, colorSpace = THREE.SRGBColorSpace) {
   });
 }
 
-function createSphere(
-  radius,
-  material,
-  widthSegments = 64,
-  heightSegments = 32,
-) {
-  const geometry = new THREE.SphereGeometry(
-    radius,
-    widthSegments,
-    heightSegments,
-  );
+function createSphere(radius, material, widthSegments = 64, heightSegments = 32) {
+  const geometry = new THREE.SphereGeometry(radius, widthSegments, heightSegments);
 
   return new THREE.Mesh(geometry, material);
 }
@@ -327,7 +311,7 @@ function createSun() {
     CONFIG.sun.radius,
     new THREE.MeshBasicMaterial({
       color: CONFIG.sun.color,
-    }),
+    })
   );
   const glow = createSphere(
     CONFIG.sun.radius * CONFIG.sun.glow.scale,
@@ -338,7 +322,7 @@ function createSun() {
       side: THREE.BackSide,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-    }),
+    })
   );
   const light = new THREE.PointLight(0xffffff, CONFIG.sun.intensity, 0, 0);
 
@@ -388,22 +372,11 @@ function createStars() {
 }
 
 function createOrbit(distance) {
-  const curve = new THREE.EllipseCurve(
-    0,
-    0,
-    distance,
-    distance,
-    0,
-    Math.PI * 2,
-    false,
-    0,
-  );
+  const curve = new THREE.EllipseCurve(0, 0, distance, distance, 0, Math.PI * 2, false, 0);
 
   const points = curve.getPoints(CONFIG.orbit.segments);
 
-  const geometry = new THREE.BufferGeometry().setFromPoints(
-    points.map(({ x, y }) => new THREE.Vector3(x, 0, y)),
-  );
+  const geometry = new THREE.BufferGeometry().setFromPoints(points.map(({x, y}) => new THREE.Vector3(x, 0, y)));
 
   const material = new THREE.LineBasicMaterial({
     color: CONFIG.orbit.color,
@@ -429,7 +402,7 @@ async function createEarth(config) {
     new THREE.MeshPhongMaterial({
       map: dayTexture,
       shininess: 15,
-    }),
+    })
   );
 
   const clouds = createSphere(
@@ -443,12 +416,12 @@ async function createEarth(config) {
       transparent: true,
       opacity: 0.7,
       depthWrite: false,
-    }),
+    })
   );
 
   earth.add(clouds);
 
-  return { mesh: earth, clouds };
+  return {mesh: earth, clouds};
 }
 
 async function createTexturedPlanet(name, config) {
@@ -476,7 +449,7 @@ async function createMoon(anchor) {
     CONFIG.moon.radius,
     new THREE.MeshPhongMaterial({
       map: texture,
-    }),
+    })
   );
 
   moon.position.x = CONFIG.moon.distance;
@@ -489,7 +462,7 @@ async function createMoon(anchor) {
   anchor.add(pivot);
   pivot.add(moon);
 
-  return { mesh: moon, pivot };
+  return {mesh: moon, pivot};
 }
 
 async function createSaturnRings(saturn) {
@@ -525,7 +498,7 @@ async function createPlanet(name, config) {
         clouds: null,
       };
 
-  const { mesh, clouds } = planetObject;
+  const {mesh, clouds} = planetObject;
 
   // The anchor carries the planet's position along the orbit and nothing
   // else, so satellites parented to it are unaffected by tilt and spin.
@@ -547,7 +520,7 @@ async function createPlanet(name, config) {
   anchor.add(tiltGroup);
   tiltGroup.add(mesh);
 
-  const planet = { name, config, mesh, anchor, orbitPivot, clouds, moon: null };
+  const planet = {name, config, mesh, anchor, orbitPivot, clouds, moon: null};
 
   if (isEarth) planet.moon = await createMoon(anchor);
 
@@ -591,10 +564,7 @@ function focusPlanet(name) {
   lastFollowPosition.copy(followPosition);
   controls.target.copy(followPosition);
 
-  const direction = new THREE.Vector3().subVectors(
-    camera.position,
-    followPosition,
-  );
+  const direction = new THREE.Vector3().subVectors(camera.position, followPosition);
 
   // Guard against the camera sitting exactly on the planet, which would
   // normalize to a zero vector and put NaN into the camera position.
@@ -602,19 +572,13 @@ function focusPlanet(name) {
 
   direction.normalize();
 
-  const distance = Math.max(
-    planet.config.radius * CONFIG.focus.distanceFactor,
-    CONFIG.focus.minDistance,
-  );
+  const distance = Math.max(planet.config.radius * CONFIG.focus.distanceFactor, CONFIG.focus.minDistance);
 
   // The default minimum zoom distance is tuned for the whole system and is
   // larger than the focus distance of every planet except Jupiter, so it has
   // to be relaxed per planet or OrbitControls pushes the camera straight back
   // out on the next update.
-  controls.minDistance = Math.max(
-    planet.config.radius * CONFIG.focus.clearanceFactor,
-    0.5,
-  );
+  controls.minDistance = Math.max(planet.config.radius * CONFIG.focus.clearanceFactor, 0.5);
 
   camera.position.copy(followPosition).add(direction.multiplyScalar(distance));
 
@@ -680,9 +644,7 @@ function createUI() {
           .map(
             (name) => `
               <button
-                class="planet-button ${
-                  name === state.selectedPlanet ? 'planet-button--active' : ''
-                }"
+                class="planet-button ${name === state.selectedPlanet ? 'planet-button--active' : ''}"
                 data-planet="${name}"
               >
                 <span class="planet-button__dot"></span>
@@ -691,7 +653,7 @@ function createUI() {
                   ${formatPlanetName(name)}
                 </span>
               </button>
-            `,
+            `
           )
           .join('')}
       </div>
@@ -785,7 +747,7 @@ function animatePlanets(delta) {
 }
 
 function updatePlanetRotation(planet, delta) {
-  const { config, orbitPivot, mesh, clouds } = planet;
+  const {config, orbitPivot, mesh, clouds} = planet;
 
   const deltaTime = delta * state.speed * 0.1;
 
@@ -800,7 +762,7 @@ function updatePlanetRotation(planet, delta) {
 function updateMoonRotation(planet, delta) {
   if (!planet.moon) return;
 
-  const { pivot, mesh } = planet.moon;
+  const {pivot, mesh} = planet.moon;
   const deltaTime = delta * state.speed * 0.1;
 
   pivot.rotation.y += CONFIG.moon.orbitSpeed * deltaTime;
@@ -843,11 +805,7 @@ async function init() {
   // immediately and the planets appear as their textures resolve.
   renderer.setAnimationLoop(animate);
 
-  await Promise.all(
-    Object.entries(CONFIG.planets).map(([name, config]) =>
-      createPlanet(name, config),
-    ),
-  );
+  await Promise.all(Object.entries(CONFIG.planets).map(([name, config]) => createPlanet(name, config)));
 
   createUI();
   resetCamera();
