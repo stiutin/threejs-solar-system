@@ -66,6 +66,17 @@ The render loop uses `renderer.setAnimationLoop()`, which lets the browser pause
 
 The control panel is generated in JavaScript, appended to the body and styled with plain CSS. Planet buttons are built from the same `CONFIG.planets` object that builds the scene, so adding a planet to the config adds it to the UI automatically. Focusing a planet reads its world position and moves both the camera and the orbit-controls target toward it.
 
+### Asset loading
+
+Textures live in `public/` and are copied into the build untouched. The site is a GitHub Pages project site, served under a sub-path, so texture URLs are resolved against Vite's base URL:
+
+```js
+const BASE_URL = import.meta.env.BASE_URL;
+const earthTexture = `${BASE_URL}textures/earth/earth_day.webp`;
+```
+
+With a relative `base` in `vite.config.js`, the same code works at `/` locally and at `/threejs-solar-system/` in production.
+
 ## Testing
 
 | Layer      | Tool       | What it covers                                                                                |
@@ -88,17 +99,6 @@ e2e/                 # Playwright smoke tests
 scripts/             # README screenshots
 .github/workflows/   # CI: lint, build, smoke tests, deploy to GitHub Pages
 ```
-
-## Asset loading
-
-Textures live in `public/` and are copied into the build untouched. The site is a GitHub Pages project site, served under a sub-path, so texture URLs are resolved against Vite's base URL:
-
-```js
-const BASE_URL = import.meta.env.BASE_URL;
-const earthTexture = `${BASE_URL}textures/earth/earth_day.webp`;
-```
-
-With a relative `base` in `vite.config.js`, the same code works at `/` locally and at `/threejs-solar-system/` in production.
 
 ## Running locally
 
