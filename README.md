@@ -24,7 +24,8 @@ Eight textured planets orbit a light-emitting Sun against a procedurally generat
 - Click any planet in the scene to focus it, with a pointer and its name on hover; small, distant planets count as hit when the click lands near them
 - Simulation speed control from 0x to 5x and a pause/resume toggle
 - Frame-rate independent animation driven by elapsed time
-- Responsive canvas and a mobile layout for the UI panel
+- Responsive canvas; on a phone the panel folds away once you choose a planet, leaving it in view
+- Planet names float over the scene, follow their planets and focus them when clicked; a checkbox hides them
 - Reduced motion respected: the camera jumps instead of flying, and the loader goes without a fade
 
 ## Tech stack
@@ -76,7 +77,13 @@ A click on the canvas becomes a ray from the camera through the pointer, with `T
 
 The orbit controls use the same pointer, so a click is told apart from a drag: a press and release less than 5 pixels apart picks, anything longer turns the view. Hovering with a mouse shows a pointer and the planet's name, raycasting at most once a frame. Keyboard and screen reader users have the same choice in the panel, which stays the accessible way in.
 
+### Planet labels
+
+The names over the scene are HTML, not geometry. `CSS2DRenderer` from the Three.js addons draws a layer of DOM elements over the canvas and, on every frame, moves each label to where its anchor projects on screen, and hides it when it is behind the camera. Each label hangs from its planet's anchor, a little above the planet (1.6 radii), so it travels along the orbit and never covers the planet itself. Being HTML, the labels stay sharp at any pixel ratio and take a click like any element; the layer itself lets the pointer through to the orbit controls. They are hidden from screen readers, which have the panel's planet list.
+
 ### UI
+
+On a phone the panel would cover most of the scene, so it can fold down to its header: the title, the chosen planet and a Show controls / Hide controls button with `aria-expanded`. Choosing a planet folds it, so the camera's flight ends on a planet you can see; the button opens it again. Wider screens have room for both, and there the panel never folds.
 
 The control panel is generated in JavaScript, appended to the body and styled with plain CSS. Planet buttons are built from the same `CONFIG.planets` object that builds the scene, so adding a planet to the config adds it to the UI automatically. The status line under the planet's description is a live region, so screen readers hear when the camera starts and stops following.
 
@@ -93,9 +100,9 @@ With a relative `base` in `vite.config.js`, the same code works at `/` locally a
 
 ## Testing
 
-| Layer      | Tool       | What it covers                                                                                                                                                                                                                                                                                                  |
-| ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| End-to-end | Playwright | the production build on desktop and mobile: loads without errors, controls work, a focused planet stays in view as it orbits and leaves it when released, flight or jump depending on reduced motion, clicking a planet in the scene focuses it while a drag does not, the hover pointer and name - 8 scenarios |
+| Layer      | Tool       | What it covers                                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| End-to-end | Playwright | the production build on desktop and mobile: loads without errors, controls work, a focused planet stays in view as it orbits and leaves it when released, flight or jump depending on reduced motion, clicking a planet in the scene focuses it while a drag does not, the hover pointer and name, the panel folding on a phone, labels that focus their planet and can be hidden - 10 scenarios |
 
 WebGL output is hard to assert pixel by pixel, so the tests check behaviour instead: no uncaught errors or console messages, the canvas appears, and the controls do what they say. To see whether the camera follows, a test reads the average brightness of the centre of the view from a screenshot: a planet fills it while followed, and empty space takes over once it is released. CI runs the suite against the exact build it deploys.
 
@@ -145,8 +152,6 @@ Pushing to `master` runs formatting and lint, then builds the site and runs the 
 
 ## Roadmap
 
-- [ ] A panel that folds away on phones, so the scene and a focused planet stay in view
-- [ ] Planet labels rendered over the canvas
 - [ ] Elliptical orbits and more accurate relative sizes
 - [ ] Bloom and other post-processing on the Sun
 - [ ] TypeScript migration

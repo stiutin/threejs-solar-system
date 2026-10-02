@@ -54,16 +54,17 @@ scripts/         README screenshots
 - **Loading.** A `THREE.LoadingManager` drives the progress bar (`#loader-bar`, `#loader-status`); `hideLoader()` removes it when every texture has loaded. Texture URLs are built from `import.meta.env.BASE_URL`, which is relative (`./`) in builds. With reduced motion there is no fade and so no `transitionend`, so the loader is removed at once rather than left at opacity 0, where screen readers would still read it.
 - **Structure of a planet.** An orbit pivot (a rotating `Object3D` at the Sun) holds the planet mesh at its distance. Earth has a second, transparent cloud sphere rotating on its own. The Moon has its own pivot on Earth. Saturn gets a ring mesh with a transparent texture.
 - **Animation** is driven by elapsed time, multiplied by the simulation speed, so it is frame-rate independent. Pause sets the speed multiplier to zero and keeps rendering, so the controls still work.
-- **Panel.** `createUI` joins one markup function per section (`headerMarkup`, `planetListMarkup`, `planetInfoMarkup`, `speedControlMarkup`, `actionsMarkup`), then `queryUIElements` collects the elements the code updates and `bindUIEvents` wires them.
+- **Panel.** `createUI` puts the header first and wraps every other section (`planetListMarkup`, `planetInfoMarkup`, `labelsControlMarkup`, `speedControlMarkup`, `actionsMarkup`) in `#panel-body`; `queryUIElements` collects what the code updates and `bindUIEvents` wires it. `setPanelFolded` sets `data-folded`, the toggle's `aria-expanded` and text, and the summary; `focusPlanet` folds the panel when `phoneLayout` (the same `width <= 640px` as style.css) matches. The CSS folds only inside that media query.
 - **Focus and follow.** `focusPlanet` sets `state.followed`, computes where the camera ends relative to the planet (`focusOffset`) and starts `state.flight` (or jumps, with reduced motion). Each frame `updateFollow` either advances the flight (`updateFlight`, eased, towards the planet's current position, controls disabled) or rides along (`rideAlong`: camera and target turned around the Y axis by the angle the planet travelled, then moved with it). `stopFollowing` leaves the camera where it is. `updateFollowUI` keeps `#follow-button` (`aria-pressed`) and the `#follow-status` live region in step.
 - **Picking.** `enablePicking` listens to the canvas. `handlePointerDown`/`handlePointerUp` treat a press and release within `CONFIG.picking.clickTolerance` pixels as a click and call `planetUnder`, which raycasts against every planet's anchor (recursively) and maps the hit to `anchor.userData.planet` through `planetOf`; if nothing is hit, `planetNear` takes the planet whose projected centre is within `CONFIG.picking.nearMiss` pixels. `handleHover` sets the canvas cursor and `title`, once per animation frame.
+- **Labels.** `createLabelRenderer` (a `CSS2DRenderer`, created before the render loop starts) draws `.labels` over the canvas; `addLabels` hangs a `CSS2DObject` from each planet's anchor, `CONFIG.labels.offset` radii above it. `animate` renders it after the WebGL scene and `resize` resizes it. The layer has `pointer-events: none` and each `.planet-label` `auto`; a label click calls `focusPlanet`. `#labels-toggle` hides the whole layer.
 - **Unsupported WebGL** shows an explicit message (`showUnsupportedMessage()`) instead of a blank page.
 
 ## 6. Invariants - do not break
 
 1. Asset URLs always go through `BASE_URL`. Never use absolute `/textures/...`, because the site lives under `/threejs-solar-system/`.
 2. Keep `CONFIG.planets` and `TEXTURES` keys in sync; the UI and the smoke tests use the keys (`data-planet="saturn"`).
-3. The UI element ids (`#planet-name`, `#pause-button`, `#speed`, `#speed-value`, `#loader`, `#follow-button`, `#follow-status`) are used by the tests.
+3. The UI element ids (`#planet-name`, `#pause-button`, `#speed`, `#speed-value`, `#loader`, `#follow-button`, `#follow-status`, `#panel-toggle`, `#panel-summary`, `#labels-toggle`, `.planet-label`) are used by the tests.
 4. Texture credits (CC BY 4.0) stay in the README.
 5. Pixel ratio is capped (`getPixelRatio()`) for performance on HiDPI screens.
 
@@ -76,7 +77,7 @@ scripts/         README screenshots
 
 ## 8. Testing guide
 
-`e2e/smoke.spec.js`: the textures load and the loader disappears; focusing Saturn updates the panel; pause and speed controls respond. Each test fails on any uncaught error or console error. Assert behaviour and DOM state, not pixels. Following is checked with `centreBrightness()`, the average brightness of a square at the centre of a screenshot (WebGL keeps no drawing buffer to read): high while a planet is followed, low once it is released. Thresholds leave room for night sides and software rendering; transient states such as the flight are checked through the status text, since screenshots of software WebGL are too slow to time. Scene clicks use `centreOn()`: focus a planet from the panel, stop the planets and release the follow, which leaves the planet in the middle of the view to click, drag or hover; these run on desktop, because on a phone the panel covers the middle.
+`e2e/smoke.spec.js`: the textures load and the loader disappears; focusing Saturn updates the panel; pause and speed controls respond. Each test fails on any uncaught error or console error. Assert behaviour and DOM state, not pixels. Following is checked with `centreBrightness()`, the average brightness of a square at the centre of a screenshot (WebGL keeps no drawing buffer to read): high while a planet is followed, low once it is released. Thresholds leave room for night sides and software rendering; transient states such as the flight are checked through the status text, since screenshots of software WebGL are too slow to time. Scene clicks use `centreOn()`: focus a planet from the panel, stop the planets and release the follow, which leaves the planet in the middle of the view to click, drag or hover; on a phone `openPanel()` and `foldPanel()` open the panel to use it and fold it to free the middle of the view. Labels move every frame, so a label click is dispatched to the element rather than waiting for it to settle; scene tests are marked `test.slow()` for software WebGL.
 
 ## 9. Recipes
 
@@ -99,7 +100,6 @@ The jobs are _Lint and types_ (formatting and lint), _Build_ (uploads `dist/`), 
 ## 12. Known limitations
 
 - Circular orbits and stylised sizes and distances (see the roadmap in the README).
-- On a phone the panel covers most of the view, including the middle where a focused planet sits; folding it away is first on the roadmap.
 
 ## House style (identical in every repository of this portfolio)
 
