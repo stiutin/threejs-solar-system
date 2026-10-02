@@ -3,6 +3,7 @@ import './style.css';
 import * as THREE from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {CSS2DObject, CSS2DRenderer} from 'three/addons/renderers/CSS2DRenderer.js';
 
 const BASE_URL = import.meta.env.BASE_URL;
 
@@ -157,6 +158,10 @@ const CONFIG = {
   planetMaterial: {
     shininess: 8,
   },
+  labels: {
+    // Labels sit above their planet by this many planet radii, so they never cover it.
+    offset: 1.6,
+  },
   ambientLight: {
     color: 0x9fb7d9,
     intensity: 0.22,
@@ -211,6 +216,8 @@ const state = {
 };
 
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+// The phone layout of style.css, where the panel can fold away; keep the two widths in step.
+const phoneLayout = window.matchMedia('(width <= 640px)');
 
 // The planets orbit around the world's Y axis, in the XZ plane.
 const ORBIT_AXIS = new THREE.Vector3(0, 1, 0);
@@ -226,6 +233,7 @@ const camera = createCamera();
 // script before anything could tell the user why.
 let renderer = null;
 let controls = null;
+let labelRenderer = null;
 const timer = new THREE.Timer();
 const planets = new Map();
 const loadingManager = createLoadingManager();
@@ -681,6 +689,11 @@ function focusPlanet(name) {
   updatePlanetInfo();
   updateActivePlanetButton();
   updateFollowUI();
+
+  // On a phone the open panel covers the planet the camera is flying to.
+  if (uiElements && phoneLayout.matches) {
+    setPanelFolded(true);
+  }
 }
 
 const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
@@ -870,6 +883,40 @@ function handleHover(event) {
   });
 }
 
+/** The layer that draws HTML labels over the canvas, in step with the WebGL scene. */
+function createLabelRenderer() {
+  const labels = new CSS2DRenderer();
+
+  labels.setSize(window.innerWidth, window.innerHeight);
+  labels.domElement.className = 'labels';
+  document.body.appendChild(labels.domElement);
+  return labels;
+}
+
+/** A name over each planet. */
+function addLabels() {
+  for (const planet of planets.values()) {
+    planet.anchor.add(createLabel(planet));
+  }
+}
+
+function createLabel(planet) {
+  const element = document.createElement('div');
+
+  element.className = 'planet-label';
+  element.textContent = formatPlanetName(planet.name);
+  // The panel's planet list is the accessible way to pick a planet; the labels are a pointer shortcut.
+  element.setAttribute('aria-hidden', 'true');
+  element.addEventListener('click', () => {
+    focusPlanet(planet.name);
+  });
+
+  const label = new CSS2DObject(element);
+
+  label.position.y = planet.config.radius * CONFIG.labels.offset;
+  return label;
+}
+
 function enablePicking() {
   const canvas = renderer.domElement;
 
@@ -907,8 +954,18 @@ function headerMarkup() {
     <div class="ui__header">
       <div>
         <h1>Solar System</h1>
-        <p>Interactive Three.js simulation</p>
+        <p class="ui__subtitle">Interactive Three.js simulation</p>
+        <p id="panel-summary" class="ui__summary"></p>
       </div>
+
+      <button
+        id="panel-toggle"
+        class="ui-button ui-button--secondary ui__toggle"
+        aria-expanded="true"
+        aria-controls="panel-body"
+      >
+        Hide controls
+      </button>
     </div>
   `;
 }
@@ -967,6 +1024,18 @@ function planetInfoMarkup() {
 }
 
 /** The simulation speed slider. */
+/** Whether the names of the planets float over the scene. */
+function labelsControlMarkup() {
+  return `
+    <div class="ui__section">
+      <label class="labels-toggle">
+        <input id="labels-toggle" type="checkbox" checked />
+        <span>Planet labels</span>
+      </label>
+    </div>
+  `;
+}
+
 function speedControlMarkup() {
   return `
     <div class="ui__section">
@@ -1014,9 +1083,10 @@ function createUI() {
   const ui = document.createElement('aside');
 
   ui.className = 'ui';
-  ui.innerHTML = [headerMarkup(), planetListMarkup(), planetInfoMarkup(), speedControlMarkup(), actionsMarkup()].join(
-    ''
-  );
+  const body = [planetListMarkup(), planetInfoMarkup(), labelsControlMarkup(), speedControlMarkup(), actionsMarkup()];
+
+  // Everything but the header folds away on a phone; on wider screens the panel is always open.
+  ui.innerHTML = `${headerMarkup()}<div id="panel-body" class="ui__body">${body.join('')}</div>`;
   document.body.appendChild(ui);
 
   uiElements = queryUIElements(ui);
@@ -1034,6 +1104,10 @@ function queryUIElements(ui) {
     followStatus: ui.querySelector('#follow-status'),
     speedInput: ui.querySelector('#speed'),
     speedValue: ui.querySelector('#speed-value'),
+    panel: ui,
+    panelToggle: ui.querySelector('#panel-toggle'),
+    panelSummary: ui.querySelector('#panel-summary'),
+    labelsToggle: ui.querySelector('#labels-toggle'),
   };
 }
 
@@ -1054,6 +1128,20 @@ function bindUIEvents() {
     focusPlanet(state.selectedPlanet);
   });
   uiElements.speedInput.addEventListener('input', handleSpeedChange);
+  uiElements.panelToggle.addEventListener('click', () => {
+    setPanelFolded(!uiElements.panel.hasAttribute('data-folded'));
+  });
+  uiElements.labelsToggle.addEventListener('change', (event) => {
+    labelRenderer.domElement.hidden = !event.target.checked;
+  });
+}
+
+/** Folds the panel down to its header, or opens it again; the CSS only folds it in the phone layout. */
+function setPanelFolded(folded) {
+  uiElements.panel.toggleAttribute('data-folded', folded);
+  uiElements.panelToggle.setAttribute('aria-expanded', String(!folded));
+  uiElements.panelToggle.textContent = folded ? 'Show controls' : 'Hide controls';
+  uiElements.panelSummary.textContent = folded ? formatPlanetName(state.selectedPlanet) : '';
 }
 
 function handleSpeedChange(event) {
@@ -1106,6 +1194,7 @@ function resize() {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(getPixelRatio());
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
 }
 
 function animate() {
@@ -1117,6 +1206,7 @@ function animate() {
   updateFollow(delta);
   controls.update();
   renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
 }
 
 async function init() {
@@ -1127,6 +1217,7 @@ async function init() {
   }
 
   renderer = createRenderer();
+  labelRenderer = createLabelRenderer();
   controls = createControls();
 
   createAmbientLight();
@@ -1139,6 +1230,7 @@ async function init() {
 
   await Promise.all(Object.entries(CONFIG.planets).map(([name, config]) => createPlanet(name, config)));
 
+  addLabels();
   createUI();
   enablePicking();
   resetCamera();
