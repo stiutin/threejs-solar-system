@@ -391,3 +391,15 @@ canvas {
     transition: none;
   }
 }
+
+#follow-button {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.follow-status {
+  color: rgb(255 255 255 / 70%);
+  font-size: 12px;
+  margin-top: 8px;
+  min-height: 1.4em;
+}
