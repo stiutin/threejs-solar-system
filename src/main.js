@@ -22,6 +22,14 @@ const CONFIG = {
     minDistance: 5,
     maxDistance: 150,
   },
+  picking: {
+    // How far the pointer may travel between press and release, in CSS pixels, and still count as a click
+    // rather than a drag of the orbit controls.
+    clickTolerance: 5,
+    // A click that misses every mesh still picks a planet whose centre is this close on screen, in CSS pixels,
+    // so the small, distant planets can be clicked too.
+    nearMiss: 14,
+  },
   focus: {
     // Camera distance when focusing a planet, as a multiple of its radius.
     distanceFactor: 6,
@@ -541,6 +549,9 @@ async function createPlanet(name, config) {
 
   if (isEarth) planet.moon = await createMoon(anchor);
 
+  // Everything under the anchor (the planet, Earth's clouds and Moon, Saturn's ring) picks this planet.
+  anchor.userData.planet = name;
+
   planets.set(name, planet);
 
   return planet;
@@ -718,6 +729,114 @@ function updateFollowUI() {
   uiElements.followButton.setAttribute('aria-pressed', String(following));
   uiElements.followButton.textContent = following ? 'Stop following' : `Follow ${name}`;
   uiElements.followStatus.textContent = followStatusText(name);
+}
+
+const raycaster = new THREE.Raycaster();
+const pointerNdc = new THREE.Vector2();
+const projected = new THREE.Vector3();
+let pointerDown = null;
+let hoverFrame = 0;
+
+/** The planet a hit object belongs to: the nearest ancestor that carries a planet name. */
+function planetOf(object) {
+  for (let current = object; current; current = current.parent) {
+    if (current.userData.planet) {
+      return current.userData.planet;
+    }
+  }
+  return null;
+}
+
+/** The planet whose geometry is under a point of the canvas, nearest first, or null. */
+function planetUnder(clientX, clientY) {
+  const bounds = renderer.domElement.getBoundingClientRect();
+
+  pointerNdc.set(((clientX - bounds.left) / bounds.width) * 2 - 1, -((clientY - bounds.top) / bounds.height) * 2 + 1);
+  raycaster.setFromCamera(pointerNdc, camera);
+
+  const anchors = [...planets.values()].map((planet) => planet.anchor);
+  const [hit] = raycaster.intersectObjects(anchors, true);
+
+  return hit ? planetOf(hit.object) : planetNear(clientX, clientY, bounds);
+}
+
+/** The planet whose centre is within CONFIG.picking.nearMiss pixels of a point on screen, nearest first. */
+function planetNear(clientX, clientY, bounds) {
+  let nearest = null;
+  let nearestDistance = CONFIG.picking.nearMiss;
+
+  for (const planet of planets.values()) {
+    planet.mesh.getWorldPosition(projected).project(camera);
+
+    // Behind the camera, the projection lands on the screen mirrored; skip it.
+    if (projected.z > 1) {
+      continue;
+    }
+
+    const x = bounds.left + ((projected.x + 1) / 2) * bounds.width;
+    const y = bounds.top + ((1 - projected.y) / 2) * bounds.height;
+    const distance = Math.hypot(x - clientX, y - clientY);
+
+    if (distance < nearestDistance) {
+      nearest = planet.name;
+      nearestDistance = distance;
+    }
+  }
+  return nearest;
+}
+
+function handlePointerDown(event) {
+  if (!event.isPrimary || event.button !== 0) {
+    return;
+  }
+  pointerDown = {id: event.pointerId, x: event.clientX, y: event.clientY};
+}
+
+/** A press and release in nearly the same place is a click on the scene; anything longer is the controls' drag. */
+function handlePointerUp(event) {
+  const press = pointerDown;
+
+  pointerDown = null;
+  if (!press || press.id !== event.pointerId) {
+    return;
+  }
+  if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > CONFIG.picking.clickTolerance) {
+    return;
+  }
+
+  const name = planetUnder(event.clientX, event.clientY);
+
+  if (name) {
+    focusPlanet(name);
+  }
+}
+
+/** Shows a pointer and the planet's name over anything clickable; once per frame at most. */
+function handleHover(event) {
+  if (event.pointerType !== 'mouse' || event.buttons !== 0 || hoverFrame) {
+    return;
+  }
+
+  hoverFrame = requestAnimationFrame(() => {
+    hoverFrame = 0;
+
+    const name = planetUnder(event.clientX, event.clientY);
+    const canvas = renderer.domElement;
+
+    canvas.style.cursor = name ? 'pointer' : '';
+    canvas.title = name ? formatPlanetName(name) : '';
+  });
+}
+
+function enablePicking() {
+  const canvas = renderer.domElement;
+
+  canvas.addEventListener('pointerdown', handlePointerDown);
+  canvas.addEventListener('pointerup', handlePointerUp);
+  canvas.addEventListener('pointercancel', () => {
+    pointerDown = null;
+  });
+  canvas.addEventListener('pointermove', handleHover);
 }
 
 function resetCamera() {
@@ -942,6 +1061,7 @@ async function init() {
   await Promise.all(Object.entries(CONFIG.planets).map(([name, config]) => createPlanet(name, config)));
 
   createUI();
+  enablePicking();
   resetCamera();
   hideLoader();
 
