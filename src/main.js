@@ -28,6 +28,9 @@ const CONFIG = {
     minDistance: 1.5,
     // How close the user may then zoom in, as a multiple of the radius.
     clearanceFactor: 2.5,
+    // Seconds the camera takes to fly to a planet. Real time: pausing or speeding up the simulation does not
+    // change it.
+    flightDuration: 1.2,
   },
   scene: {
     background: 0x02030a,
@@ -168,11 +171,18 @@ const state = {
   selectedPlanet: 'earth',
   // Planet the camera is currently riding along with, if any.
   followed: null,
+  // The flight to a newly focused planet while it is in progress: where the camera and the target started,
+  // where the camera ends relative to the planet, and how far along it is.
+  flight: null,
 };
 
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
 const followPosition = new THREE.Vector3();
-const followDelta = new THREE.Vector3();
 const lastFollowPosition = new THREE.Vector3();
+// The axis the planets orbit around, and where the camera ends a flight; reused every frame.
+const ORBIT_AXIS = new THREE.Vector3(0, 1, 0);
+const followTarget = new THREE.Vector3();
 const scene = createScene();
 const camera = createCamera();
 // Created in init() rather than here: the WebGLRenderer constructor throws
@@ -231,12 +241,19 @@ function showUnsupportedMessage() {
 function hideLoader() {
   const loader = document.getElementById('loader');
 
-  if (!loader) return;
+  if (!loader) {
+    return;
+  }
+
+  // Without a fade there is no transitionend, and a loader left at opacity 0 would still be read out by screen
+  // readers, so it goes at once.
+  if (prefersReducedMotion.matches) {
+    loader.remove();
+    return;
+  }
 
   loader.classList.add('loader--hidden');
-  loader.addEventListener('transitionend', () => loader.remove(), {
-    once: true,
-  });
+  loader.addEventListener('transitionend', () => loader.remove(), {once: true});
 }
 
 function createScene() {
@@ -552,27 +569,40 @@ function formatPlanetName(name) {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
+/** Where the camera sits relative to a planet when it focuses on it: on its current side, at a set distance. */
+function focusOffset(planet, planetPosition) {
+  const direction = new THREE.Vector3().subVectors(camera.position, planetPosition);
+
+  // Guard against the camera sitting exactly on the planet, which would
+  // normalize to a zero vector and put NaN into the camera position.
+  if (direction.lengthSq() === 0) {
+    direction.set(0, 0.4, 1);
+  }
+
+  const distance = Math.max(planet.config.radius * CONFIG.focus.distanceFactor, CONFIG.focus.minDistance);
+
+  return direction.normalize().multiplyScalar(distance);
+}
+
+/**
+ * Focuses a planet and keeps the camera on it as it orbits. The camera flies there over
+ * CONFIG.focus.flightDuration, aiming at where the planet is on each frame rather than where it was when the
+ * flight began, and jumps straight there when the visitor prefers reduced motion.
+ */
 function focusPlanet(name) {
   const planet = planets.get(name);
 
-  if (!planet) return;
+  if (!planet) {
+    return;
+  }
 
   state.selectedPlanet = name;
   state.followed = name;
 
   planet.mesh.getWorldPosition(followPosition);
   lastFollowPosition.copy(followPosition);
-  controls.target.copy(followPosition);
 
-  const direction = new THREE.Vector3().subVectors(camera.position, followPosition);
-
-  // Guard against the camera sitting exactly on the planet, which would
-  // normalize to a zero vector and put NaN into the camera position.
-  if (direction.lengthSq() === 0) direction.set(0, 0.4, 1);
-
-  direction.normalize();
-
-  const distance = Math.max(planet.config.radius * CONFIG.focus.distanceFactor, CONFIG.focus.minDistance);
+  const offset = focusOffset(planet, followPosition);
 
   // The default minimum zoom distance is tuned for the whole system and is
   // larger than the focus distance of every planet except Jupiter, so it has
@@ -580,28 +610,114 @@ function focusPlanet(name) {
   // out on the next update.
   controls.minDistance = Math.max(planet.config.radius * CONFIG.focus.clearanceFactor, 0.5);
 
-  camera.position.copy(followPosition).add(direction.multiplyScalar(distance));
+  if (prefersReducedMotion.matches) {
+    state.flight = null;
+    controls.target.copy(followPosition);
+    camera.position.copy(followPosition).add(offset);
+  } else {
+    state.flight = {
+      fromCamera: camera.position.clone(),
+      fromTarget: controls.target.clone(),
+      offset,
+      elapsed: 0,
+    };
+    // The controls would pull against the flight; they take over again when it lands.
+    controls.enabled = false;
+  }
 
   updatePlanetInfo();
   updateActivePlanetButton();
+  updateFollowUI();
 }
 
-function updateFollow() {
-  if (!state.followed) return;
+const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
-  const planet = planets.get(state.followed);
+/** One frame of the flight towards the followed planet, which keeps moving while the camera travels. */
+function updateFlight(delta, planetPosition) {
+  const flight = state.flight;
 
-  if (!planet) return;
+  flight.elapsed += delta;
+  const progress = easeInOutCubic(Math.min(flight.elapsed / CONFIG.focus.flightDuration, 1));
+
+  controls.target.lerpVectors(flight.fromTarget, planetPosition, progress);
+  camera.position.lerpVectors(flight.fromCamera, followTarget.copy(planetPosition).add(flight.offset), progress);
+
+  if (progress < 1) {
+    return;
+  }
+
+  state.flight = null;
+  controls.enabled = true;
+  updateFollowUI();
+}
+
+/**
+ * Keeps the camera on the followed planet: during the flight it travels towards it, afterwards it rides along
+ * the planet's orbit.
+ */
+function updateFollow(delta) {
+  const planet = state.followed && planets.get(state.followed);
+
+  if (!planet) {
+    return;
+  }
 
   planet.mesh.getWorldPosition(followPosition);
-  followDelta.subVectors(followPosition, lastFollowPosition);
 
-  // Move the camera by the same amount as the planet instead of just
-  // retargeting, so whatever angle and zoom the user picked is preserved.
-  camera.position.add(followDelta);
-  controls.target.add(followDelta);
+  if (state.flight) {
+    updateFlight(delta, followPosition);
+  } else {
+    rideAlong(lastFollowPosition, followPosition);
+  }
 
   lastFollowPosition.copy(followPosition);
+}
+
+/** The angle of a point around the Sun, in the plane the planets orbit in. */
+const orbitAngle = (position) => Math.atan2(position.z, position.x);
+
+/**
+ * Carries the camera and the controls' target with the planet from one frame to the next, turning them around
+ * the Sun by the same angle the planet travelled. The camera keeps its place relative to the planet and the Sun,
+ * so the side of the planet in view, and its lighting, stay as they were, and any angle or zoom the visitor
+ * picked with the controls is kept too.
+ */
+function rideAlong(from, to) {
+  const turn = orbitAngle(from) - orbitAngle(to);
+
+  for (const point of [camera.position, controls.target]) {
+    point.sub(from).applyAxisAngle(ORBIT_AXIS, turn).add(to);
+  }
+}
+
+/** Leaves the camera where it is and lets the planet move on without it. */
+function stopFollowing() {
+  state.followed = null;
+  state.flight = null;
+  controls.enabled = true;
+
+  updateFollowUI();
+}
+
+function followStatusText(name) {
+  if (state.flight) {
+    return `Flying to ${name}…`;
+  }
+  return state.followed ? `The camera follows ${name} along its orbit.` : '';
+}
+
+/** The follow button and its status line, from the current state. */
+function updateFollowUI() {
+  if (!uiElements) {
+    return;
+  }
+
+  const following = state.followed !== null;
+  const name = formatPlanetName(state.followed ?? state.selectedPlanet);
+
+  uiElements.followButton.setAttribute('aria-pressed', String(following));
+  uiElements.followButton.textContent = following ? 'Stop following' : `Follow ${name}`;
+  uiElements.followStatus.textContent = followStatusText(name);
 }
 
 function resetCamera() {
@@ -610,9 +726,12 @@ function resetCamera() {
   controls.minDistance = CONFIG.controls.minDistance;
   state.selectedPlanet = 'earth';
   state.followed = null;
+  state.flight = null;
+  controls.enabled = true;
 
   updatePlanetInfo();
   updateActivePlanetButton();
+  updateFollowUI();
 }
 
 function togglePause() {
@@ -669,6 +788,12 @@ function createUI() {
       <p id="planet-description">
         Our home planet, with liquid water and life.
       </p>
+
+      <button id="follow-button" class="ui-button ui-button--secondary" aria-pressed="false">
+        Follow Earth
+      </button>
+
+      <p id="follow-status" class="follow-status" role="status" aria-live="polite"></p>
     </div>
 
     <div class="ui__section">
@@ -713,6 +838,8 @@ function createUI() {
     planetButtons: ui.querySelectorAll('[data-planet]'),
     pauseButton: ui.querySelector('#pause-button'),
     resetButton: ui.querySelector('#reset-button'),
+    followButton: ui.querySelector('#follow-button'),
+    followStatus: ui.querySelector('#follow-status'),
     speedInput: ui.querySelector('#speed'),
     speedValue: ui.querySelector('#speed-value'),
   };
@@ -729,6 +856,13 @@ function bindUIEvents() {
 
   uiElements.pauseButton.addEventListener('click', togglePause);
   uiElements.resetButton.addEventListener('click', resetCamera);
+  uiElements.followButton.addEventListener('click', () => {
+    if (state.followed) {
+      stopFollowing();
+      return;
+    }
+    focusPlanet(state.selectedPlanet);
+  });
   uiElements.speedInput.addEventListener('input', handleSpeedChange);
 }
 
@@ -782,7 +916,7 @@ function animate() {
   const delta = timer.getDelta();
 
   animatePlanets(delta);
-  updateFollow();
+  updateFollow(delta);
   controls.update();
   renderer.render(scene, camera);
 }
