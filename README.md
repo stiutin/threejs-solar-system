@@ -13,9 +13,10 @@ Eight textured planets orbit a light-emitting Sun against a procedurally generat
 
 ## Features
 
-- Eight planets with individual textures, sizes, orbital distances and rotation speeds
+- Eight planets on elliptical, inclined orbits from their real orbital elements, moving faster near the Sun as Kepler's laws say, and starting where they were on 1 January 2000
+- True relative sizes, with Jupiter eleven times Earth's width, and the real axial tilts: Uranus rolls on its side, Venus spins upside down
 - Earth rendered as two layers: a surface sphere plus a semi-transparent cloud shell rotating at its own rate
-- The Moon orbiting Earth on its own pivot
+- The Moon orbiting Earth on its own pivot, at a stylised distance
 - Saturn with a textured ring mesh
 - Visible orbit lines for every planet
 - Procedural star field of 5,000 points
@@ -39,7 +40,7 @@ No framework, no UI library. Tested with [Playwright](https://playwright.dev/).
 
 A single `Scene` holds everything. A `PerspectiveCamera` (50° FOV) is driven by `OrbitControls` with damping and clamped zoom distance. The `WebGLRenderer` is configured with `SRGBColorSpace` output, ACES filmic tone mapping, anisotropic filtering on every texture, and a pixel ratio capped at 2 so high-DPI screens don't render four times the pixels for no visible gain. A `Fog` fades distant objects into the background colour.
 
-All tunable values (radii, orbital distances, speeds, colours, star count, light intensity) live in a single `CONFIG` object at the top of `src/main.js`, so the look of the scene can be changed without touching the logic.
+All tunable values (planet sizes and orbital elements, the scale, speeds, colours, star count, light intensity) live in a single `CONFIG` object at the top of `src/main.js`, so the look of the scene can be changed without touching the logic.
 
 ### Lighting
 
@@ -47,14 +48,17 @@ A `PointLight` placed inside the Sun mesh lights the planets from the centre out
 
 ### Planets and orbits
 
-Each planet is a `SphereGeometry` mesh with a `MeshPhongMaterial`, positioned at its orbital distance and parented to an `Object3D` pivot at the origin. Rotating the pivot moves the planet along its orbit; rotating the mesh spins the planet on its axis. Orbit lines are built from an `EllipseCurve` sampled into a `LineLoop`.
+Each planet is described by real data: its radius in kilometres, its axial tilt, and the six classical orbital elements for the J2000 epoch (semi-major axis, eccentricity, inclination, longitude of the ascending node, longitude of perihelion, mean longitude). `CONFIG.scale` turns them into scene units. Sizes are linear, so the planets keep their true ratios; distances go through a square root, which keeps every orbit's order and shape while bringing Neptune's 30 AU within reach of Mercury's 0.39. Two things stay stylised and say so in the config: the Sun, which at the planets' scale would be 109 Earth radii wide and swallow the inner orbits, and the Moon's distance.
+
+From the elements, each orbit gets its size and two directions that span its plane: towards perihelion, and a quarter of an orbit further on. On every frame the mean anomaly grows evenly with simulated time; Newton's method solves Kepler's equation, M = E − e sin E, for the eccentric anomaly, and the planet sits at a(cos E − e) along the first direction and b sin E along the second, with the Sun at a focus. That is what makes Mercury, the most eccentric, visibly hurry past the Sun and slow down far from it. The orbit lines are traced through the same function, so a planet never leaves its line. The orbital speeds themselves are stylised: at the real ratio, Neptune would take 165 Earth years to go round once.
 
 ```
-Object3D (orbit pivot, rotates → orbital motion)
-  └── Mesh (planet, rotates → axial spin)
-        ├── Mesh (clouds / rings)
-        └── Object3D (moon pivot)
-              └── Mesh (moon)
+Object3D (anchor, placed on the ellipse every frame)
+  └── Object3D (tilt, the planet's real axial tilt)
+        └── Mesh (planet, rotates → axial spin)
+              └── Mesh (clouds / rings)
+  └── Object3D (moon pivot)
+        └── Mesh (moon)
 ```
 
 ### Star field
@@ -152,7 +156,6 @@ Pushing to `master` runs formatting and lint, then builds the site and runs the 
 
 ## Roadmap
 
-- [ ] Elliptical orbits and more accurate relative sizes
 - [ ] Bloom and other post-processing on the Sun
 - [ ] TypeScript migration
 
