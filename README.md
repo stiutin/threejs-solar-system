@@ -20,10 +20,11 @@ Eight textured planets orbit a light-emitting Sun against a procedurally generat
 - Visible orbit lines for every planet
 - Procedural star field of 5,000 points
 - Sun as a point light source with an additive glow shell
-- Camera focus on any planet from the UI, plus a reset-camera action
+- Camera focus on any planet from the UI: a short flight there, then the camera rides along the planet's orbit until you stop it; plus a reset-camera action
 - Simulation speed control from 0x to 5x and a pause/resume toggle
 - Frame-rate independent animation driven by elapsed time
 - Responsive canvas and a mobile layout for the UI panel
+- Reduced motion respected: the camera jumps instead of flying, and the loader goes without a fade
 
 ## Tech stack
 
@@ -62,9 +63,15 @@ Positions are generated on a sphere of fixed radius using uniformly distributed 
 
 The render loop uses `renderer.setAnimationLoop()`, which lets the browser pause rendering when the tab is hidden. `THREE.Timer` provides the delta between frames, and every rotation is multiplied by that delta and by the current speed multiplier, so the simulation runs at the same rate on a 60 Hz laptop and a 144 Hz monitor.
 
+### Following a planet
+
+Picking a planet starts a flight of 1.2 seconds, eased in and out. The camera does not aim at where the planet was when the flight began: on every frame it moves towards where the planet is now, so it lands on a moving target. The flight runs on real time, so pausing or speeding up the simulation does not change it, and the orbit controls are switched off until it lands. With reduced motion the camera goes there at once.
+
+After landing, the camera rides along. Each frame, the camera and the orbit-controls target are turned around the Sun by the angle the planet travelled and moved with it, so they keep their place relative to both the planet and the Sun. The side of the planet in view, and its lighting, stay as they were, and any angle or zoom picked with the mouse or a finger is kept too. The panel says what the camera is doing ("Flying to Mars…", "The camera follows Mars along its orbit."), and its Follow button stops or restarts the ride.
+
 ### UI
 
-The control panel is generated in JavaScript, appended to the body and styled with plain CSS. Planet buttons are built from the same `CONFIG.planets` object that builds the scene, so adding a planet to the config adds it to the UI automatically. Focusing a planet reads its world position and moves both the camera and the orbit-controls target toward it.
+The control panel is generated in JavaScript, appended to the body and styled with plain CSS. Planet buttons are built from the same `CONFIG.planets` object that builds the scene, so adding a planet to the config adds it to the UI automatically. The status line under the planet's description is a live region, so screen readers hear when the camera starts and stops following.
 
 ### Asset loading
 
@@ -79,11 +86,11 @@ With a relative `base` in `vite.config.js`, the same code works at `/` locally a
 
 ## Testing
 
-| Layer      | Tool       | What it covers                                                                                |
-| ---------- | ---------- | --------------------------------------------------------------------------------------------- |
-| End-to-end | Playwright | the production build on desktop and mobile: loads without errors, controls work - 3 scenarios |
+| Layer      | Tool       | What it covers                                                                                                                                                                                                     |
+| ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| End-to-end | Playwright | the production build on desktop and mobile: loads without errors, controls work, a focused planet stays in view as it orbits and leaves it when released, flight or jump depending on reduced motion - 5 scenarios |
 
-WebGL output is hard to assert pixel by pixel, so the tests check behaviour instead: no uncaught errors or console messages, the canvas appears, and the controls do what they say. CI runs the suite against the exact build it deploys.
+WebGL output is hard to assert pixel by pixel, so the tests check behaviour instead: no uncaught errors or console messages, the canvas appears, and the controls do what they say. To see whether the camera follows, a test reads the average brightness of the centre of the view from a screenshot: a planet fills it while followed, and empty space takes over once it is released. CI runs the suite against the exact build it deploys.
 
 ## Project structure
 
@@ -131,7 +138,6 @@ Pushing to `master` runs formatting and lint, then builds the site and runs the 
 
 ## Roadmap
 
-- [ ] Camera that keeps tracking a focused planet as it orbits
 - [ ] Click planets directly in the scene with a `Raycaster`
 - [ ] Planet labels rendered over the canvas
 - [ ] Elliptical orbits and more accurate relative sizes
