@@ -39,5 +39,9 @@ export default defineConfig(
     languageOptions: {globals: globals.node},
     rules: {'no-console': 'off'},
   },
-  eslintConfigPrettier
+  eslintConfigPrettier,
+  {
+    // eslint-config-prettier turns `curly` off; with `all` it cannot clash with Prettier, so it comes back on.
+    rules: {curly: HOUSE_RULES.curly},
+  }
 );

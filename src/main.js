@@ -139,6 +139,32 @@ const CONFIG = {
     orbitSpeed: 1.8,
     rotationSpeed: 1.8,
   },
+  earth: {
+    shininess: 15,
+    clouds: {
+      // The cloud shell sits just above the surface and turns a little faster than it.
+      scale: 1.015,
+      opacity: 0.7,
+      speedFactor: 1.2,
+    },
+  },
+  saturnRings: {
+    // In Saturn radii, so the ring scales with the planet.
+    innerRadius: 1.05,
+    outerRadius: 1.75,
+    segments: 128,
+  },
+  planetMaterial: {
+    shininess: 8,
+  },
+  ambientLight: {
+    color: 0x9fb7d9,
+    intensity: 0.22,
+  },
+  simulation: {
+    // Orbit and rotation speeds in this config are radians per second at 1x, scaled by this factor.
+    timeScale: 0.1,
+  },
 };
 
 const TEXTURES = {
@@ -186,11 +212,13 @@ const state = {
 
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
+// The planets orbit around the world's Y axis, in the XZ plane.
+const ORBIT_AXIS = new THREE.Vector3(0, 1, 0);
+
+// Scratch vectors reused on every frame instead of allocated.
 const followPosition = new THREE.Vector3();
 const lastFollowPosition = new THREE.Vector3();
-// The axis the planets orbit around, and where the camera ends a flight; reused every frame.
-const ORBIT_AXIS = new THREE.Vector3(0, 1, 0);
-const followTarget = new THREE.Vector3();
+const flightEnd = new THREE.Vector3();
 const scene = createScene();
 const camera = createCamera();
 // Created in init() rather than here: the WebGLRenderer constructor throws
@@ -239,7 +267,9 @@ function showUnsupportedMessage() {
   const track = document.getElementById('loader-track');
   const status = document.getElementById('loader-status');
 
-  if (track) track.remove();
+  if (track) {
+    track.remove();
+  }
   if (status) {
     status.textContent = 'This browser or device does not support WebGL 2, which the scene needs to render.';
     status.classList.add('loader__status--error');
@@ -359,7 +389,7 @@ function createSun() {
 }
 
 function createAmbientLight() {
-  const light = new THREE.AmbientLight(0x9fb7d9, 0.22);
+  const light = new THREE.AmbientLight(CONFIG.ambientLight.color, CONFIG.ambientLight.intensity);
 
   scene.add(light);
 }
@@ -367,11 +397,14 @@ function createAmbientLight() {
 function createStars() {
   const positions = new Float32Array(CONFIG.stars.count * 3);
 
-  for (let i = 0; i < CONFIG.stars.count; i += 1) {
+  const radius = CONFIG.stars.radius;
+
+  // Uniform over the sphere: a random longitude, and the arccosine of a uniform value for the latitude, which
+  // keeps the stars from bunching at the poles.
+  for (let star = 0; star < CONFIG.stars.count; star += 1) {
     const theta = Math.random() * Math.PI * 2;
     const phi = Math.acos(THREE.MathUtils.randFloatSpread(2));
-    const index = i * 3;
-    const radius = CONFIG.stars.radius;
+    const index = star * 3;
 
     positions[index] = radius * Math.sin(phi) * Math.cos(theta);
     positions[index + 1] = radius * Math.cos(phi);
@@ -426,12 +459,12 @@ async function createEarth(config) {
     config.radius,
     new THREE.MeshPhongMaterial({
       map: dayTexture,
-      shininess: 15,
+      shininess: CONFIG.earth.shininess,
     })
   );
 
   const clouds = createSphere(
-    config.radius * 1.015,
+    config.radius * CONFIG.earth.clouds.scale,
     new THREE.MeshPhongMaterial({
       // Used as alphaMap rather than map: as a colour map the black areas of
       // the texture are not transparent, they are dark, and they shade the
@@ -439,7 +472,7 @@ async function createEarth(config) {
       alphaMap: cloudsTexture,
       color: 0xffffff,
       transparent: true,
-      opacity: 0.7,
+      opacity: CONFIG.earth.clouds.opacity,
       depthWrite: false,
     })
   );
@@ -457,12 +490,14 @@ async function createTexturedPlanet(name, config) {
   const material = new THREE.MeshPhongMaterial({
     map: texture,
     color: texture ? 0xffffff : config.color,
-    shininess: 8,
+    shininess: CONFIG.planetMaterial.shininess,
   });
 
   const planet = createSphere(config.radius, material);
 
-  if (name === 'saturn') await createSaturnRings(planet);
+  if (name === 'saturn') {
+    await createSaturnRings(planet);
+  }
 
   return planet;
 }
@@ -492,7 +527,8 @@ async function createMoon(anchor) {
 
 async function createSaturnRings(saturn) {
   const texture = await loadTexture(TEXTURES.saturn.rings);
-  const geometry = new THREE.RingGeometry(1.05, 1.75, 128);
+  const {innerRadius, outerRadius, segments} = CONFIG.saturnRings;
+  const geometry = new THREE.RingGeometry(innerRadius, outerRadius, segments);
   const material = new THREE.MeshBasicMaterial({
     map: texture,
     transparent: true,
@@ -547,7 +583,9 @@ async function createPlanet(name, config) {
 
   const planet = {name, config, mesh, anchor, orbitPivot, clouds, moon: null};
 
-  if (isEarth) planet.moon = await createMoon(anchor);
+  if (isEarth) {
+    planet.moon = await createMoon(anchor);
+  }
 
   // Everything under the anchor (the planet, Earth's clouds and Moon, Saturn's ring) picks this planet.
   anchor.userData.planet = name;
@@ -560,14 +598,18 @@ async function createPlanet(name, config) {
 function updatePlanetInfo() {
   const planet = planets.get(state.selectedPlanet);
 
-  if (!planet || !uiElements) return;
+  if (!planet || !uiElements) {
+    return;
+  }
 
   uiElements.planetName.textContent = formatPlanetName(state.selectedPlanet);
   uiElements.planetDescription.textContent = planet.config.description;
 }
 
 function updateActivePlanetButton() {
-  if (!uiElements) return;
+  if (!uiElements) {
+    return;
+  }
 
   uiElements.planetButtons.forEach((button) => {
     const isActive = button.dataset.planet === state.selectedPlanet;
@@ -651,7 +693,7 @@ function updateFlight(delta, planetPosition) {
   const progress = easeInOutCubic(Math.min(flight.elapsed / CONFIG.focus.flightDuration, 1));
 
   controls.target.lerpVectors(flight.fromTarget, planetPosition, progress);
-  camera.position.lerpVectors(flight.fromCamera, followTarget.copy(planetPosition).add(flight.offset), progress);
+  camera.position.lerpVectors(flight.fromCamera, flightEnd.copy(planetPosition).add(flight.offset), progress);
 
   if (progress < 1) {
     return;
@@ -859,19 +901,21 @@ function togglePause() {
   uiElements.pauseButton.textContent = state.paused ? 'Resume' : 'Pause';
 }
 
-function createUI() {
-  const ui = document.createElement('aside');
-
-  ui.className = 'ui';
-
-  ui.innerHTML = `
+/** The panel's title. */
+function headerMarkup() {
+  return `
     <div class="ui__header">
       <div>
         <h1>Solar System</h1>
         <p>Interactive Three.js simulation</p>
       </div>
     </div>
+  `;
+}
 
+/** One button per planet in CONFIG.planets, so a planet added there appears here too. */
+function planetListMarkup() {
+  return `
     <div class="ui__section">
       <div class="ui__section-title">
         <span>PLANETS</span>
@@ -896,7 +940,12 @@ function createUI() {
           .join('')}
       </div>
     </div>
+  `;
+}
 
+/** The selected planet, its description, and the follow button with its live status line. */
+function planetInfoMarkup() {
+  return `
     <div class="ui__section ui__planet-info">
       <div class="ui__section-title">
         <span>SELECTED PLANET</span>
@@ -914,7 +963,12 @@ function createUI() {
 
       <p id="follow-status" class="follow-status" role="status" aria-live="polite"></p>
     </div>
+  `;
+}
 
+/** The simulation speed slider. */
+function speedControlMarkup() {
+  return `
     <div class="ui__section">
       <div class="speed-header">
         <span>Simulation speed</span>
@@ -931,7 +985,12 @@ function createUI() {
         value="1"
       />
     </div>
+  `;
+}
 
+/** Pause and reset. */
+function actionsMarkup() {
+  return `
     <div class="ui__actions">
       <button
         id="pause-button"
@@ -947,11 +1006,25 @@ function createUI() {
         Reset camera
       </button>
     </div>
+  
   `;
+}
 
+function createUI() {
+  const ui = document.createElement('aside');
+
+  ui.className = 'ui';
+  ui.innerHTML = [headerMarkup(), planetListMarkup(), planetInfoMarkup(), speedControlMarkup(), actionsMarkup()].join(
+    ''
+  );
   document.body.appendChild(ui);
 
-  uiElements = {
+  uiElements = queryUIElements(ui);
+  bindUIEvents();
+}
+
+function queryUIElements(ui) {
+  return {
     planetName: ui.querySelector('#planet-name'),
     planetDescription: ui.querySelector('#planet-description'),
     planetButtons: ui.querySelectorAll('[data-planet]'),
@@ -962,8 +1035,6 @@ function createUI() {
     speedInput: ui.querySelector('#speed'),
     speedValue: ui.querySelector('#speed-value'),
   };
-
-  bindUIEvents();
 }
 
 function bindUIEvents() {
@@ -986,12 +1057,14 @@ function bindUIEvents() {
 }
 
 function handleSpeedChange(event) {
-  state.speed = +event.target.value;
+  state.speed = Number(event.target.value);
   uiElements.speedValue.textContent = `${state.speed}x`;
 }
 
 function animatePlanets(delta) {
-  if (state.paused) return;
+  if (state.paused) {
+    return;
+  }
 
   planets.forEach((planet) => {
     updatePlanetRotation(planet, delta);
@@ -999,27 +1072,33 @@ function animatePlanets(delta) {
   });
 }
 
+/** How far the simulation moves in a frame: real seconds, times the chosen speed, times the config's scale. */
+function simulationStep(delta) {
+  return delta * state.speed * CONFIG.simulation.timeScale;
+}
+
 function updatePlanetRotation(planet, delta) {
   const {config, orbitPivot, mesh, clouds} = planet;
+  const step = simulationStep(delta);
 
-  const deltaTime = delta * state.speed * 0.1;
-
-  orbitPivot.rotation.y += config.orbitSpeed * deltaTime;
-  mesh.rotation.y += config.rotationSpeed * deltaTime;
+  orbitPivot.rotation.y += config.orbitSpeed * step;
+  mesh.rotation.y += config.rotationSpeed * step;
 
   if (clouds) {
-    clouds.rotation.y += config.rotationSpeed * delta * state.speed * 0.12;
+    clouds.rotation.y += config.rotationSpeed * CONFIG.earth.clouds.speedFactor * step;
   }
 }
 
 function updateMoonRotation(planet, delta) {
-  if (!planet.moon) return;
+  if (!planet.moon) {
+    return;
+  }
 
   const {pivot, mesh} = planet.moon;
-  const deltaTime = delta * state.speed * 0.1;
+  const step = simulationStep(delta);
 
-  pivot.rotation.y += CONFIG.moon.orbitSpeed * deltaTime;
-  mesh.rotation.y += CONFIG.moon.rotationSpeed * deltaTime;
+  pivot.rotation.y += CONFIG.moon.orbitSpeed * step;
+  mesh.rotation.y += CONFIG.moon.rotationSpeed * step;
 }
 
 function resize() {
@@ -1071,7 +1150,9 @@ async function init() {
 init().catch((error) => {
   const status = document.getElementById('loader-status');
 
-  if (status) status.textContent = 'Failed to load the scene';
+  if (status) {
+    status.textContent = 'Failed to load the scene';
+  }
 
   console.error('Failed to initialize Solar System:', error);
 });
