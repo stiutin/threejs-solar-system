@@ -51,17 +51,17 @@ scripts/         README screenshots
 ## 5. Architecture
 
 - **`CONFIG` drives everything.** Camera, renderer, controls, focus behaviour, the Sun, stars, orbits, and `CONFIG.planets` (size, distance, speeds, description). The UI planet buttons are built from the same object, so adding a planet to `CONFIG.planets` and `TEXTURES` adds it to the scene _and_ the panel.
-- **Loading.** A `THREE.LoadingManager` drives the progress bar (`#loader-bar`, `#loader-status`); `hideLoader()` removes it when every texture has loaded. Texture URLs are built from `import.meta.env.BASE_URL`, which is relative (`./`) in builds.
+- **Loading.** A `THREE.LoadingManager` drives the progress bar (`#loader-bar`, `#loader-status`); `hideLoader()` removes it when every texture has loaded. Texture URLs are built from `import.meta.env.BASE_URL`, which is relative (`./`) in builds. With reduced motion there is no fade and so no `transitionend`, so the loader is removed at once rather than left at opacity 0, where screen readers would still read it.
 - **Structure of a planet.** An orbit pivot (a rotating `Object3D` at the Sun) holds the planet mesh at its distance. Earth has a second, transparent cloud sphere rotating on its own. The Moon has its own pivot on Earth. Saturn gets a ring mesh with a transparent texture.
 - **Animation** is driven by elapsed time, multiplied by the simulation speed, so it is frame-rate independent. Pause sets the speed multiplier to zero and keeps rendering, so the controls still work.
-- **Focus** reads the planet's world position and moves the camera and the `OrbitControls` target towards it.
+- **Focus and follow.** `focusPlanet` sets `state.followed`, computes where the camera ends relative to the planet (`focusOffset`) and starts `state.flight` (or jumps, with reduced motion). Each frame `updateFollow` either advances the flight (`updateFlight`, eased, towards the planet's current position, controls disabled) or rides along (`rideAlong`: camera and target turned around the Y axis by the angle the planet travelled, then moved with it). `stopFollowing` leaves the camera where it is. `updateFollowUI` keeps `#follow-button` (`aria-pressed`) and the `#follow-status` live region in step.
 - **Unsupported WebGL** shows an explicit message (`showUnsupportedMessage()`) instead of a blank page.
 
 ## 6. Invariants - do not break
 
 1. Asset URLs always go through `BASE_URL`. Never use absolute `/textures/...`, because the site lives under `/threejs-solar-system/`.
 2. Keep `CONFIG.planets` and `TEXTURES` keys in sync; the UI and the smoke tests use the keys (`data-planet="saturn"`).
-3. The UI element ids (`#planet-name`, `#pause-button`, `#speed`, `#speed-value`, `#loader`) are used by the tests.
+3. The UI element ids (`#planet-name`, `#pause-button`, `#speed`, `#speed-value`, `#loader`, `#follow-button`, `#follow-status`) are used by the tests.
 4. Texture credits (CC BY 4.0) stay in the README.
 5. Pixel ratio is capped (`getPixelRatio()`) for performance on HiDPI screens.
 
@@ -74,7 +74,7 @@ scripts/         README screenshots
 
 ## 8. Testing guide
 
-`e2e/smoke.spec.js`: the textures load and the loader disappears; focusing Saturn updates the panel; pause and speed controls respond. Each test fails on any uncaught error or console error. Assert behaviour and DOM state, not pixels.
+`e2e/smoke.spec.js`: the textures load and the loader disappears; focusing Saturn updates the panel; pause and speed controls respond. Each test fails on any uncaught error or console error. Assert behaviour and DOM state, not pixels. Following is checked with `centreBrightness()`, the average brightness of a square at the centre of a screenshot (WebGL keeps no drawing buffer to read): high while a planet is followed, low once it is released. Thresholds leave room for night sides and software rendering; transient states such as the flight are checked through the status text, since screenshots of software WebGL are too slow to time.
 
 ## 9. Recipes
 
@@ -97,7 +97,6 @@ The jobs are _Lint and types_ (formatting and lint), _Build_ (uploads `dist/`), 
 ## 12. Known limitations
 
 - Circular orbits and stylised sizes and distances (see the roadmap in the README).
-- The camera does not keep tracking a focused planet as it moves along its orbit.
 
 ## House style (identical in every repository of this portfolio)
 
