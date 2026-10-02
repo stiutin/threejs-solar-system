@@ -12,7 +12,7 @@ const CONFIG = {
     fov: 50,
     near: 0.1,
     far: 1000,
-    position: new THREE.Vector3(32, 24, 42),
+    position: new THREE.Vector3(58, 50, 78),
   },
   renderer: {
     antialias: true,
@@ -34,7 +34,7 @@ const CONFIG = {
   focus: {
     // Camera distance when focusing a planet, as a multiple of its radius.
     distanceFactor: 6,
-    minDistance: 1.5,
+    minDistance: 0.6,
     // How close the user may then zoom in, as a multiple of the radius.
     clearanceFactor: 2.5,
     // Seconds the camera takes to fly to a planet. Real time: pausing or speeding up the simulation does not
@@ -44,11 +44,20 @@ const CONFIG = {
   scene: {
     background: 0x02030a,
     fogColor: 0x02030a,
-    fogNear: 80,
-    fogFar: 250,
+    fogNear: 120,
+    fogFar: 300,
+  },
+  scale: {
+    // Scene units for Earth's radius; every planet is sized against it, so their ratios are true.
+    earthRadius: 0.2,
+    // Scene units per square root of an AU. The square root keeps the order and the eccentricity of every orbit
+    // while bringing Neptune's 30 AU within reach of Mercury's 0.39.
+    distance: 9,
   },
   sun: {
-    radius: 2,
+    // Stylised: the true Sun, 109 Earth radii, would swallow the inner planets at this scale. It is still
+    // larger than Jupiter, as it should be.
+    radius: 2.8,
     color: 0xffd27d,
     intensity: 3,
     glow: {
@@ -68,66 +77,131 @@ const CONFIG = {
     color: 0x9aa4bd,
     opacity: 0.55,
   },
+  // Sizes, orbits and tilts are the real ones (orbital elements for the J2000 epoch); CONFIG.scale turns them
+  // into scene units. Orbit and spin speeds are the stylised ones the scene has always used.
   planets: {
     mercury: {
-      radius: 0.22,
-      distance: 4,
+      radiusKm: 2439.7,
+      orbit: {
+        semiMajorAxisAu: 0.387098,
+        eccentricity: 0.20563,
+        inclination: 7.005,
+        ascendingNode: 48.331,
+        perihelionLongitude: 77.456,
+        meanLongitude: 252.251,
+      },
+      axialTilt: 0.034,
       orbitSpeed: 1.6,
       rotationSpeed: 1.8,
       color: 0x9a9a9a,
-      description: 'The smallest planet and the closest to the Sun.',
+      description: 'The smallest planet and the closest to the Sun. Its orbit is the most eccentric of the eight.',
     },
     venus: {
-      radius: 0.38,
-      distance: 6,
+      radiusKm: 6051.8,
+      orbit: {
+        semiMajorAxisAu: 0.723332,
+        eccentricity: 0.006772,
+        inclination: 3.395,
+        ascendingNode: 76.68,
+        perihelionLongitude: 131.533,
+        meanLongitude: 181.98,
+      },
+      axialTilt: 177.4,
       orbitSpeed: 1.2,
       rotationSpeed: 0.5,
       color: 0xc88b4a,
-      description: 'A hot planet covered by a dense atmosphere.',
+      description: 'A hot planet covered by a dense atmosphere, spinning backwards on its axis.',
     },
     earth: {
-      radius: 0.42,
-      distance: 8,
+      radiusKm: 6371.0,
+      orbit: {
+        semiMajorAxisAu: 1.0,
+        eccentricity: 0.016709,
+        inclination: 0.0,
+        ascendingNode: -11.261,
+        perihelionLongitude: 102.947,
+        meanLongitude: 100.464,
+      },
+      axialTilt: 23.44,
       orbitSpeed: 1,
       rotationSpeed: 2,
-      axialTilt: 23.4,
       description: 'Our home planet, with liquid water and life.',
     },
     mars: {
-      radius: 0.32,
-      distance: 10,
+      radiusKm: 3389.5,
+      orbit: {
+        semiMajorAxisAu: 1.523679,
+        eccentricity: 0.0934,
+        inclination: 1.85,
+        ascendingNode: 49.558,
+        perihelionLongitude: 336.04,
+        meanLongitude: 355.453,
+      },
+      axialTilt: 25.19,
       orbitSpeed: 0.8,
       rotationSpeed: 1.9,
       color: 0xb84f35,
       description: 'The red planet with a cold, rocky surface.',
     },
     jupiter: {
-      radius: 1.05,
-      distance: 14,
+      radiusKm: 69911,
+      orbit: {
+        semiMajorAxisAu: 5.2044,
+        eccentricity: 0.0489,
+        inclination: 1.303,
+        ascendingNode: 100.464,
+        perihelionLongitude: 14.331,
+        meanLongitude: 34.396,
+      },
+      axialTilt: 3.13,
       orbitSpeed: 0.45,
       rotationSpeed: 4,
       color: 0xc98b62,
-      description: 'The largest planet in the Solar System.',
+      description: 'The largest planet: eleven Earths would fit across it.',
     },
     saturn: {
-      radius: 0.9,
-      distance: 19,
+      radiusKm: 58232,
+      orbit: {
+        semiMajorAxisAu: 9.5826,
+        eccentricity: 0.0565,
+        inclination: 2.485,
+        ascendingNode: 113.665,
+        perihelionLongitude: 93.057,
+        meanLongitude: 49.954,
+      },
+      axialTilt: 26.73,
       orbitSpeed: 0.32,
       rotationSpeed: 3.6,
       color: 0xd8b889,
       description: 'A gas giant famous for its spectacular rings.',
     },
     uranus: {
-      radius: 0.62,
-      distance: 24,
+      radiusKm: 25362,
+      orbit: {
+        semiMajorAxisAu: 19.2184,
+        eccentricity: 0.046381,
+        inclination: 0.773,
+        ascendingNode: 74.006,
+        perihelionLongitude: 173.005,
+        meanLongitude: 313.232,
+      },
+      axialTilt: 97.77,
       orbitSpeed: 0.23,
       rotationSpeed: 2.5,
       color: 0x7fd6df,
-      description: 'An ice giant with an extreme axial tilt.',
+      description: 'An ice giant that rolls along its orbit on its side.',
     },
     neptune: {
-      radius: 0.6,
-      distance: 29,
+      radiusKm: 24622,
+      orbit: {
+        semiMajorAxisAu: 30.11,
+        eccentricity: 0.009456,
+        inclination: 1.77,
+        ascendingNode: 131.784,
+        perihelionLongitude: 48.123,
+        meanLongitude: 304.88,
+      },
+      axialTilt: 28.32,
       orbitSpeed: 0.18,
       rotationSpeed: 2.7,
       color: 0x4169e1,
@@ -135,8 +209,9 @@ const CONFIG = {
     },
   },
   moon: {
-    radius: 0.12,
-    distance: 0.9,
+    radiusKm: 1737.4,
+    // Stylised: at the true 60 Earth radii the Moon would sit far outside the view of a focused Earth.
+    distance: 0.6,
     orbitSpeed: 1.8,
     rotationSpeed: 1.8,
   },
@@ -437,34 +512,106 @@ function createStars() {
   return stars;
 }
 
-function createOrbit(distance) {
-  const curve = new THREE.EllipseCurve(0, 0, distance, distance, 0, Math.PI * 2, false, 0);
+const EARTH_RADIUS_KM = 6371;
 
-  const points = curve.getPoints(CONFIG.orbit.segments);
+/** A radius in kilometres in scene units, true to Earth's (and so to every other planet's). */
+function sceneRadius(radiusKm) {
+  return (CONFIG.scale.earthRadius * radiusKm) / EARTH_RADIUS_KM;
+}
 
-  const geometry = new THREE.BufferGeometry().setFromPoints(points.map(({x, y}) => new THREE.Vector3(x, 0, y)));
+/**
+ * An orbit ready to move along: its size in scene units, its eccentricity, and the two directions (towards
+ * perihelion, and a quarter of an orbit further) that span its plane, from the classical orbital elements.
+ * Ecliptic coordinates map to the scene with the ecliptic plane as XZ and its north pole as +Y.
+ */
+function orbitGeometry({
+  semiMajorAxisAu,
+  eccentricity,
+  inclination,
+  ascendingNode,
+  perihelionLongitude,
+  meanLongitude,
+}) {
+  const node = THREE.MathUtils.degToRad(ascendingNode);
+  const perihelionArgument = THREE.MathUtils.degToRad(perihelionLongitude - ascendingNode);
+  const tilt = THREE.MathUtils.degToRad(inclination);
+  const semiMajor = CONFIG.scale.distance * Math.sqrt(semiMajorAxisAu);
 
+  const [cosNode, sinNode] = [Math.cos(node), Math.sin(node)];
+  const [cosArgument, sinArgument] = [Math.cos(perihelionArgument), Math.sin(perihelionArgument)];
+  const [cosTilt, sinTilt] = [Math.cos(tilt), Math.sin(tilt)];
+  const toScene = (x, y, z) => new THREE.Vector3(x, z, -y);
+
+  return {
+    semiMajor,
+    semiMinor: semiMajor * Math.sqrt(1 - eccentricity ** 2),
+    eccentricity,
+    towardsPerihelion: toScene(
+      cosNode * cosArgument - sinNode * sinArgument * cosTilt,
+      sinNode * cosArgument + cosNode * sinArgument * cosTilt,
+      sinArgument * sinTilt
+    ),
+    quarterOnward: toScene(
+      -cosNode * sinArgument - sinNode * cosArgument * cosTilt,
+      -sinNode * sinArgument + cosNode * cosArgument * cosTilt,
+      cosArgument * sinTilt
+    ),
+    // Where the planet was on 1 January 2000, so the planets start spread out as they really were.
+    startingMeanAnomaly: THREE.MathUtils.degToRad(meanLongitude - perihelionLongitude),
+  };
+}
+
+/**
+ * The eccentric anomaly for a mean anomaly: Kepler's equation, M = E - e sin E, solved by Newton's method.
+ * Starting from E = M, five steps are far more than the planets' eccentricities (at most 0.21) need.
+ */
+function solveKepler(meanAnomaly, eccentricity) {
+  let eccentricAnomaly = meanAnomaly;
+
+  for (let step = 0; step < 5; step += 1) {
+    eccentricAnomaly -=
+      (eccentricAnomaly - eccentricity * Math.sin(eccentricAnomaly) - meanAnomaly) /
+      (1 - eccentricity * Math.cos(eccentricAnomaly));
+  }
+  return eccentricAnomaly;
+}
+
+/** The point of an orbit at an eccentric anomaly, with the Sun at a focus of the ellipse. */
+function pointOnOrbit(orbit, eccentricAnomaly, target = new THREE.Vector3()) {
+  const alongMajor = orbit.semiMajor * (Math.cos(eccentricAnomaly) - orbit.eccentricity);
+  const alongMinor = orbit.semiMinor * Math.sin(eccentricAnomaly);
+
+  return target
+    .copy(orbit.towardsPerihelion)
+    .multiplyScalar(alongMajor)
+    .addScaledVector(orbit.quarterOnward, alongMinor);
+}
+
+/** The orbit's line, traced through the same function that moves the planet, so the two always agree. */
+function createOrbit(orbit) {
+  const points = Array.from({length: CONFIG.orbit.segments}, (_, index) =>
+    pointOnOrbit(orbit, (index / CONFIG.orbit.segments) * Math.PI * 2)
+  );
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
   const material = new THREE.LineBasicMaterial({
     color: CONFIG.orbit.color,
     transparent: true,
     opacity: CONFIG.orbit.opacity,
   });
+  const line = new THREE.LineLoop(geometry, material);
 
-  const orbit = new THREE.LineLoop(geometry, material);
-
-  scene.add(orbit);
-
-  return orbit;
+  scene.add(line);
+  return line;
 }
 
-async function createEarth(config) {
+async function createEarth(radius) {
   const [dayTexture, cloudsTexture] = await Promise.all([
     loadTexture(TEXTURES.earth.day),
     loadTexture(TEXTURES.earth.clouds),
   ]);
 
   const earth = createSphere(
-    config.radius,
+    radius,
     new THREE.MeshPhongMaterial({
       map: dayTexture,
       shininess: CONFIG.earth.shininess,
@@ -472,7 +619,7 @@ async function createEarth(config) {
   );
 
   const clouds = createSphere(
-    config.radius * CONFIG.earth.clouds.scale,
+    radius * CONFIG.earth.clouds.scale,
     new THREE.MeshPhongMaterial({
       // Used as alphaMap rather than map: as a colour map the black areas of
       // the texture are not transparent, they are dark, and they shade the
@@ -490,7 +637,7 @@ async function createEarth(config) {
   return {mesh: earth, clouds};
 }
 
-async function createTexturedPlanet(name, config) {
+async function createTexturedPlanet(name, config, radius) {
   const texturePath = TEXTURES[name]?.map;
 
   const texture = texturePath ? await loadTexture(texturePath) : null;
@@ -501,10 +648,10 @@ async function createTexturedPlanet(name, config) {
     shininess: CONFIG.planetMaterial.shininess,
   });
 
-  const planet = createSphere(config.radius, material);
+  const planet = createSphere(radius, material);
 
   if (name === 'saturn') {
-    await createSaturnRings(planet);
+    await createSaturnRings(planet, radius);
   }
 
   return planet;
@@ -514,7 +661,7 @@ async function createMoon(anchor) {
   const texture = await loadTexture(TEXTURES.moon.map);
 
   const moon = createSphere(
-    CONFIG.moon.radius,
+    sceneRadius(CONFIG.moon.radiusKm),
     new THREE.MeshPhongMaterial({
       map: texture,
     })
@@ -533,7 +680,7 @@ async function createMoon(anchor) {
   return {mesh: moon, pivot};
 }
 
-async function createSaturnRings(saturn) {
+async function createSaturnRings(saturn, radius) {
   const texture = await loadTexture(TEXTURES.saturn.rings);
   const {innerRadius, outerRadius, segments} = CONFIG.saturnRings;
   const geometry = new THREE.RingGeometry(innerRadius, outerRadius, segments);
@@ -546,7 +693,7 @@ async function createSaturnRings(saturn) {
   const rings = new THREE.Mesh(geometry, material);
 
   rings.rotation.x = Math.PI / 2;
-  rings.scale.setScalar(CONFIG.planets.saturn.radius);
+  rings.scale.setScalar(radius);
 
   saturn.add(rings);
 
@@ -554,16 +701,16 @@ async function createSaturnRings(saturn) {
 }
 
 async function createPlanet(name, config) {
-  const orbitPivot = new THREE.Object3D();
+  const radius = sceneRadius(config.radiusKm);
+  const orbit = orbitGeometry(config.orbit);
 
-  scene.add(orbitPivot);
-  createOrbit(config.distance);
+  createOrbit(orbit);
 
   const isEarth = name === 'earth';
   const planetObject = isEarth
-    ? await createEarth(config)
+    ? await createEarth(radius)
     : {
-        mesh: await createTexturedPlanet(name, config),
+        mesh: await createTexturedPlanet(name, config, radius),
         clouds: null,
       };
 
@@ -572,9 +719,6 @@ async function createPlanet(name, config) {
   // The anchor carries the planet's position along the orbit and nothing
   // else, so satellites parented to it are unaffected by tilt and spin.
   const anchor = new THREE.Object3D();
-
-  anchor.position.x = config.distance;
-  orbitPivot.add(anchor);
 
   // The tilt sits on a parent of the mesh. Setting both rotation.z (tilt)
   // and rotation.y (spin) on the same object composes them in Euler XYZ
@@ -589,7 +733,19 @@ async function createPlanet(name, config) {
   anchor.add(tiltGroup);
   tiltGroup.add(mesh);
 
-  const planet = {name, config, mesh, anchor, orbitPivot, clouds, moon: null};
+  const planet = {
+    name,
+    config,
+    radius,
+    orbit,
+    meanAnomaly: orbit.startingMeanAnomaly,
+    mesh,
+    anchor,
+    clouds,
+    moon: null,
+  };
+
+  placeOnOrbit(planet);
 
   if (isEarth) {
     planet.moon = await createMoon(anchor);
@@ -597,8 +753,6 @@ async function createPlanet(name, config) {
 
   // Everything under the anchor (the planet, Earth's clouds and Moon, Saturn's ring) picks this planet.
   anchor.userData.planet = name;
-
-  planets.set(name, planet);
 
   return planet;
 }
@@ -623,6 +777,8 @@ function updateActivePlanetButton() {
     const isActive = button.dataset.planet === state.selectedPlanet;
 
     button.classList.toggle('planet-button--active', isActive);
+    // The colour alone would not tell a screen reader which planet is selected.
+    button.setAttribute('aria-pressed', String(isActive));
   });
 }
 
@@ -640,7 +796,7 @@ function focusOffset(planet, planetPosition) {
     direction.set(0, 0.4, 1);
   }
 
-  const distance = Math.max(planet.config.radius * CONFIG.focus.distanceFactor, CONFIG.focus.minDistance);
+  const distance = Math.max(planet.radius * CONFIG.focus.distanceFactor, CONFIG.focus.minDistance);
 
   return direction.normalize().multiplyScalar(distance);
 }
@@ -665,11 +821,9 @@ function focusPlanet(name) {
 
   const offset = focusOffset(planet, followPosition);
 
-  // The default minimum zoom distance is tuned for the whole system and is
-  // larger than the focus distance of every planet except Jupiter, so it has
-  // to be relaxed per planet or OrbitControls pushes the camera straight back
-  // out on the next update.
-  controls.minDistance = Math.max(planet.config.radius * CONFIG.focus.clearanceFactor, 0.5);
+  // The system-wide minimum zoom distance is larger than the focus distance of every planet, so it is
+  // relaxed per planet; otherwise OrbitControls pushes the camera straight back out on the next update.
+  controls.minDistance = Math.max(planet.radius * CONFIG.focus.clearanceFactor, 0.5);
 
   if (prefersReducedMotion.matches) {
     state.flight = null;
@@ -789,6 +943,8 @@ function updateFollowUI() {
 const raycaster = new THREE.Raycaster();
 const pointerNdc = new THREE.Vector2();
 const projected = new THREE.Vector3();
+// Every planet's anchor, gathered once the planets exist, so hovering does not rebuild the list each frame.
+const pickTargets = [];
 let pointerDown = null;
 let hoverFrame = 0;
 
@@ -809,8 +965,7 @@ function planetUnder(clientX, clientY) {
   pointerNdc.set(((clientX - bounds.left) / bounds.width) * 2 - 1, -((clientY - bounds.top) / bounds.height) * 2 + 1);
   raycaster.setFromCamera(pointerNdc, camera);
 
-  const anchors = [...planets.values()].map((planet) => planet.anchor);
-  const [hit] = raycaster.intersectObjects(anchors, true);
+  const [hit] = raycaster.intersectObjects(pickTargets, true);
 
   return hit ? planetOf(hit.object) : planetNear(clientX, clientY, bounds);
 }
@@ -913,12 +1068,14 @@ function createLabel(planet) {
 
   const label = new CSS2DObject(element);
 
-  label.position.y = planet.config.radius * CONFIG.labels.offset;
+  label.position.y = planet.radius * CONFIG.labels.offset;
   return label;
 }
 
 function enablePicking() {
   const canvas = renderer.domElement;
+
+  pickTargets.push(...[...planets.values()].map((planet) => planet.anchor));
 
   canvas.addEventListener('pointerdown', handlePointerDown);
   canvas.addEventListener('pointerup', handlePointerUp);
@@ -933,13 +1090,10 @@ function resetCamera() {
   controls.target.set(0, 0, 0);
   controls.minDistance = CONFIG.controls.minDistance;
   state.selectedPlanet = 'earth';
-  state.followed = null;
-  state.flight = null;
-  controls.enabled = true;
+  stopFollowing();
 
   updatePlanetInfo();
   updateActivePlanetButton();
-  updateFollowUI();
 }
 
 function togglePause() {
@@ -985,6 +1139,7 @@ function planetListMarkup() {
               <button
                 class="planet-button ${name === state.selectedPlanet ? 'planet-button--active' : ''}"
                 data-planet="${name}"
+                aria-pressed="${name === state.selectedPlanet}"
               >
                 <span class="planet-button__dot"></span>
 
@@ -1165,11 +1320,18 @@ function simulationStep(delta) {
   return delta * state.speed * CONFIG.simulation.timeScale;
 }
 
+/** Moves a planet to where its mean anomaly puts it: faster near perihelion, slower near aphelion. */
+function placeOnOrbit(planet) {
+  pointOnOrbit(planet.orbit, solveKepler(planet.meanAnomaly, planet.orbit.eccentricity), planet.anchor.position);
+}
+
 function updatePlanetRotation(planet, delta) {
-  const {config, orbitPivot, mesh, clouds} = planet;
+  const {config, mesh, clouds} = planet;
   const step = simulationStep(delta);
 
-  orbitPivot.rotation.y += config.orbitSpeed * step;
+  // The mean anomaly grows evenly; Kepler's equation turns it into the uneven motion along the ellipse.
+  planet.meanAnomaly += config.orbitSpeed * step;
+  placeOnOrbit(planet);
   mesh.rotation.y += config.rotationSpeed * step;
 
   if (clouds) {
@@ -1227,16 +1389,23 @@ async function init() {
   // The Sun and the star field need no textures, so rendering can start
   // immediately and the planets appear as their textures resolve.
   renderer.setAnimationLoop(animate);
+  // Listening from the start: a resize while the textures load would otherwise leave the canvas the wrong size.
+  window.addEventListener('resize', resize);
 
-  await Promise.all(Object.entries(CONFIG.planets).map(([name, config]) => createPlanet(name, config)));
+  const created = await Promise.all(Object.entries(CONFIG.planets).map(([name, config]) => createPlanet(name, config)));
+
+  // Registered in the config's order, not in the order their textures happened to arrive, so the labels, the
+  // pick list, the scene graph and anything else that walks the planets sees Mercury first and Neptune last.
+  for (const planet of created) {
+    scene.add(planet.anchor);
+    planets.set(planet.name, planet);
+  }
 
   addLabels();
   createUI();
   enablePicking();
   resetCamera();
   hideLoader();
-
-  window.addEventListener('resize', resize);
 }
 
 init().catch((error) => {
