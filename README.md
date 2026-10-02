@@ -21,6 +21,7 @@ Eight textured planets orbit a light-emitting Sun against a procedurally generat
 - Procedural star field of 5,000 points
 - Sun as a point light source with an additive glow shell
 - Camera focus on any planet from the UI: a short flight there, then the camera rides along the planet's orbit until you stop it; plus a reset-camera action
+- Click any planet in the scene to focus it, with a pointer and its name on hover; small, distant planets count as hit when the click lands near them
 - Simulation speed control from 0x to 5x and a pause/resume toggle
 - Frame-rate independent animation driven by elapsed time
 - Responsive canvas and a mobile layout for the UI panel
@@ -69,6 +70,12 @@ Picking a planet starts a flight of 1.2 seconds, eased in and out. The camera do
 
 After landing, the camera rides along. Each frame, the camera and the orbit-controls target are turned around the Sun by the angle the planet travelled and moved with it, so they keep their place relative to both the planet and the Sun. The side of the planet in view, and its lighting, stay as they were, and any angle or zoom picked with the mouse or a finger is kept too. The panel says what the camera is doing ("Flying to Mars…", "The camera follows Mars along its orbit."), and its Follow button stops or restarts the ride.
 
+### Picking planets in the scene
+
+A click on the canvas becomes a ray from the camera through the pointer, with `THREE.Raycaster`. It is tested against each planet's anchor and everything under it, so Earth's clouds and Moon pick Earth and Saturn's ring picks Saturn; the nearest hit wins, so a planet behind another cannot be picked through it. Mercury and Mars are a few pixels across from afar, so a click that misses every mesh still picks the planet whose centre is within 14 pixels on screen.
+
+The orbit controls use the same pointer, so a click is told apart from a drag: a press and release less than 5 pixels apart picks, anything longer turns the view. Hovering with a mouse shows a pointer and the planet's name, raycasting at most once a frame. Keyboard and screen reader users have the same choice in the panel, which stays the accessible way in.
+
 ### UI
 
 The control panel is generated in JavaScript, appended to the body and styled with plain CSS. Planet buttons are built from the same `CONFIG.planets` object that builds the scene, so adding a planet to the config adds it to the UI automatically. The status line under the planet's description is a live region, so screen readers hear when the camera starts and stops following.
@@ -86,9 +93,9 @@ With a relative `base` in `vite.config.js`, the same code works at `/` locally a
 
 ## Testing
 
-| Layer      | Tool       | What it covers                                                                                                                                                                                                     |
-| ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| End-to-end | Playwright | the production build on desktop and mobile: loads without errors, controls work, a focused planet stays in view as it orbits and leaves it when released, flight or jump depending on reduced motion - 5 scenarios |
+| Layer      | Tool       | What it covers                                                                                                                                                                                                                                                                                                  |
+| ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| End-to-end | Playwright | the production build on desktop and mobile: loads without errors, controls work, a focused planet stays in view as it orbits and leaves it when released, flight or jump depending on reduced motion, clicking a planet in the scene focuses it while a drag does not, the hover pointer and name - 8 scenarios |
 
 WebGL output is hard to assert pixel by pixel, so the tests check behaviour instead: no uncaught errors or console messages, the canvas appears, and the controls do what they say. To see whether the camera follows, a test reads the average brightness of the centre of the view from a screenshot: a planet fills it while followed, and empty space takes over once it is released. CI runs the suite against the exact build it deploys.
 
@@ -138,7 +145,6 @@ Pushing to `master` runs formatting and lint, then builds the site and runs the 
 
 ## Roadmap
 
-- [ ] Click planets directly in the scene with a `Raycaster`
 - [ ] Planet labels rendered over the canvas
 - [ ] Elliptical orbits and more accurate relative sizes
 - [ ] Bloom and other post-processing on the Sun
