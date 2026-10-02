@@ -12,6 +12,22 @@ function trackErrors(page) {
   return errors;
 }
 
+/** Opens the panel when it is folded, in the phone layout; elsewhere it is always open. */
+async function openPanel(page) {
+  const toggle = page.locator('#panel-toggle');
+  if ((await toggle.isVisible()) && (await toggle.getAttribute('aria-expanded')) === 'false') {
+    await toggle.click();
+  }
+}
+
+/** Folds the panel away in the phone layout, so it leaves the middle of the view free. */
+async function foldPanel(page) {
+  const toggle = page.locator('#panel-toggle');
+  if ((await toggle.isVisible()) && (await toggle.getAttribute('aria-expanded')) === 'true') {
+    await toggle.click();
+  }
+}
+
 test('loads the textures and shows the scene', async ({page}) => {
   const errors = trackErrors(page);
   await page.goto('./');
@@ -76,7 +92,9 @@ const SPACE = 40;
 // Loading every texture with software WebGL can take a while when tests run side by side.
 const SCENE_TIMEOUT = 20_000;
 
-test('keeps a focused planet in view as it orbits, until told to stop', async ({page, isMobile}) => {
+test('keeps a focused planet in view as it orbits, until told to stop', async ({page}) => {
+  // Software WebGL in CI renders slowly, and these scenes are followed for seconds at a time.
+  test.slow();
   const errors = trackErrors(page);
   await page.goto('./');
   await expect(page.locator('#loader')).toBeHidden({timeout: SCENE_TIMEOUT});
@@ -93,15 +111,14 @@ test('keeps a focused planet in view as it orbits, until told to stop', async ({
   expect(await centreBrightness(page)).toBeGreaterThan(PLANET);
 
   const followed = await centreBrightness(page);
+  await openPanel(page);
   await page.locator('#follow-button').click();
   await expect(page.locator('#follow-button')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#follow-button')).toHaveText('Follow Mercury');
-  // Left behind, the planet moves out of the centre and the view darkens. On a phone the panel sits over the
-  // lower half of the view and the reading is too close to call, so the desktop run checks it.
-  if (!isMobile) {
-    await page.waitForTimeout(3000);
-    expect(await centreBrightness(page)).toBeLessThan(Math.min(SPACE * 2, followed / 2));
-  }
+  await foldPanel(page);
+  // Left behind, the planet moves out of the centre and the view darkens.
+  await page.waitForTimeout(3000);
+  expect(await centreBrightness(page)).toBeLessThan(Math.min(SPACE * 2, followed / 2));
   expect(errors).toEqual([]);
 });
 
@@ -115,6 +132,7 @@ test('flies to a planet, or jumps there when motion is reduced', async ({page}) 
   await expect(status).toHaveText('The camera follows Jupiter along its orbit.');
 
   await page.emulateMedia({reducedMotion: 'reduce'});
+  await openPanel(page);
   await page.locator('[data-planet="saturn"]').click();
   // No flight: the status reads "follows" straight away, without a "Flying to" first.
   expect(await status.textContent()).toBe('The camera follows Saturn along its orbit.');
@@ -124,9 +142,11 @@ test('flies to a planet, or jumps there when motion is reduced', async ({page}) 
 async function centreOn(page, planet) {
   await page.locator(`[data-planet="${planet}"]`).click();
   await expect(page.locator('#follow-status')).toHaveText(new RegExp(`follows ${planet}`, 'i'));
+  await openPanel(page);
   await page.locator('#speed').fill('0');
   await page.locator('#follow-button').click();
   await expect(page.locator('#follow-button')).toHaveAttribute('aria-pressed', 'false');
+  await foldPanel(page);
 }
 
 /** The middle of the viewport, where a planet focused from the panel sits. */
@@ -135,9 +155,9 @@ function viewCentre(page) {
   return {x: width / 2, y: height / 2};
 }
 
-test('focuses a planet clicked in the scene', async ({page, isMobile}) => {
-  // On a phone the panel covers the middle of the view, where a planet focused from the panel ends up.
-  test.skip(isMobile, 'the panel covers the centre of the view');
+test('focuses a planet clicked in the scene', async ({page}) => {
+  // Software WebGL in CI renders slowly, and these scenes are followed for seconds at a time.
+  test.slow();
   const errors = trackErrors(page);
   await page.goto('./');
   await expect(page.locator('#loader')).toBeHidden({timeout: SCENE_TIMEOUT});
@@ -152,9 +172,9 @@ test('focuses a planet clicked in the scene', async ({page, isMobile}) => {
   expect(errors).toEqual([]);
 });
 
-test('a drag over a planet turns the view instead of picking it', async ({page, isMobile}) => {
-  // On a phone the panel covers the middle of the view, where a planet focused from the panel ends up.
-  test.skip(isMobile, 'the panel covers the centre of the view');
+test('a drag over a planet turns the view instead of picking it', async ({page}) => {
+  // Software WebGL in CI renders slowly, and these scenes are followed for seconds at a time.
+  test.slow();
   await page.goto('./');
   await expect(page.locator('#loader')).toBeHidden({timeout: SCENE_TIMEOUT});
   await centreOn(page, 'saturn');
@@ -184,4 +204,46 @@ test('shows a pointer and the name over a planet', async ({page, isMobile}) => {
   await page.mouse.move(page.viewportSize().width - 5, page.viewportSize().height - 5);
   await expect(canvas).toHaveAttribute('title', '');
   await expect(canvas).toHaveCSS('cursor', 'auto');
+});
+
+test('on a phone the panel folds away for the chosen planet, and opens again', async ({page, isMobile}) => {
+  await page.goto('./');
+  await expect(page.locator('#loader')).toBeHidden({timeout: SCENE_TIMEOUT});
+  const toggle = page.locator('#panel-toggle');
+
+  if (!isMobile) {
+    // Wider screens have room for the panel: it has no toggle and never folds.
+    await expect(toggle).toBeHidden();
+    await page.locator('[data-planet="mars"]').click();
+    await expect(page.locator('[data-planet="venus"]')).toBeVisible();
+    return;
+  }
+
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await page.locator('[data-planet="mars"]').click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('[data-planet="venus"]')).toBeHidden();
+  await expect(page.locator('#panel-summary')).toHaveText('Mars');
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('[data-planet="venus"]')).toBeVisible();
+});
+
+test('labels name the planets over the scene, focus them when clicked, and can be hidden', async ({page}) => {
+  await page.goto('./');
+  await expect(page.locator('#loader')).toBeHidden({timeout: SCENE_TIMEOUT});
+  const labels = page.locator('.planet-label');
+
+  await expect(labels).toHaveCount(8);
+  await expect(labels).toContainText(['Mercury', 'Venus', 'Earth', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune']);
+
+  // Labels move with their planets, so a real click would wait for them to settle; the click itself is what
+  // is under test, so it is dispatched to the label directly.
+  await labels.filter({hasText: 'Jupiter'}).dispatchEvent('click');
+  await expect(page.locator('#follow-status')).toHaveText(/Jupiter/);
+
+  await openPanel(page);
+  await page.locator('#labels-toggle').uncheck();
+  await expect(labels.first()).toBeHidden();
 });

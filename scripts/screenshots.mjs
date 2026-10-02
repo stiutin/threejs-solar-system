@@ -59,7 +59,11 @@ await shoot({viewport: {width: 1440, height: 900}}, 'saturn', async (page) => {
   await page.locator('[data-planet="saturn"]').click();
   await page.waitForTimeout(2500);
 });
-await shoot({...devices['Pixel 7'], deviceScaleFactor: 2}, 'mobile');
+// On a phone, choosing a planet folds the panel away, leaving the planet and its label in view.
+await shoot({...devices['Pixel 7'], deviceScaleFactor: 2}, 'mobile', async (page) => {
+  await page.locator('[data-planet="jupiter"]').click();
+  await page.waitForTimeout(2500);
+});
 
 await browser.close();
 if (server?.pid) {
