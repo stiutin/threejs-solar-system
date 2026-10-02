@@ -119,3 +119,69 @@ test('flies to a planet, or jumps there when motion is reduced', async ({page}) 
   // No flight: the status reads "follows" straight away, without a "Flying to" first.
   expect(await status.textContent()).toBe('The camera follows Saturn along its orbit.');
 });
+
+/** Focuses a planet from the panel, waits for the flight to land, then releases it, leaving it in the centre. */
+async function centreOn(page, planet) {
+  await page.locator(`[data-planet="${planet}"]`).click();
+  await expect(page.locator('#follow-status')).toHaveText(new RegExp(`follows ${planet}`, 'i'));
+  await page.locator('#speed').fill('0');
+  await page.locator('#follow-button').click();
+  await expect(page.locator('#follow-button')).toHaveAttribute('aria-pressed', 'false');
+}
+
+/** The middle of the viewport, where a planet focused from the panel sits. */
+function viewCentre(page) {
+  const {width, height} = page.viewportSize();
+  return {x: width / 2, y: height / 2};
+}
+
+test('focuses a planet clicked in the scene', async ({page, isMobile}) => {
+  // On a phone the panel covers the middle of the view, where a planet focused from the panel ends up.
+  test.skip(isMobile, 'the panel covers the centre of the view');
+  const errors = trackErrors(page);
+  await page.goto('./');
+  await expect(page.locator('#loader')).toBeHidden({timeout: SCENE_TIMEOUT});
+  await centreOn(page, 'saturn');
+
+  const {x, y} = viewCentre(page);
+  await page.mouse.click(x, y);
+
+  await expect(page.locator('#follow-status')).toHaveText(/Saturn/);
+  await expect(page.locator('#follow-button')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#planet-name')).toHaveText('Saturn');
+  expect(errors).toEqual([]);
+});
+
+test('a drag over a planet turns the view instead of picking it', async ({page, isMobile}) => {
+  // On a phone the panel covers the middle of the view, where a planet focused from the panel ends up.
+  test.skip(isMobile, 'the panel covers the centre of the view');
+  await page.goto('./');
+  await expect(page.locator('#loader')).toBeHidden({timeout: SCENE_TIMEOUT});
+  await centreOn(page, 'saturn');
+
+  const {x, y} = viewCentre(page);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 80, y + 20, {steps: 8});
+  await page.mouse.up();
+
+  await expect(page.locator('#follow-button')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#follow-status')).toHaveText('');
+});
+
+test('shows a pointer and the name over a planet', async ({page, isMobile}) => {
+  test.skip(isMobile, 'a mouse pointer');
+  await page.goto('./');
+  await expect(page.locator('#loader')).toBeHidden({timeout: SCENE_TIMEOUT});
+  await centreOn(page, 'saturn');
+  const canvas = page.locator('canvas');
+
+  const {x, y} = viewCentre(page);
+  await page.mouse.move(x, y);
+  await expect(canvas).toHaveAttribute('title', 'Saturn');
+  await expect(canvas).toHaveCSS('cursor', 'pointer');
+
+  await page.mouse.move(page.viewportSize().width - 5, page.viewportSize().height - 5);
+  await expect(canvas).toHaveAttribute('title', '');
+  await expect(canvas).toHaveCSS('cursor', 'auto');
+});
