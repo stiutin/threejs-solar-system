@@ -50,10 +50,11 @@ scripts/         README screenshots
 
 ## 5. Architecture
 
-- **`CONFIG` drives everything.** Camera, renderer, controls, focus behaviour, the Sun, stars, orbits, and `CONFIG.planets` (size, distance, speeds, description). The UI planet buttons are built from the same object, so adding a planet to `CONFIG.planets` and `TEXTURES` adds it to the scene _and_ the panel.
+- **`CONFIG` drives everything.** Camera, renderer, controls, focus behaviour, the Sun, stars, orbits, and `CONFIG.planets` (size, distance, speeds, description). The UI planet buttons are built from the same object, so adding a planet to `CONFIG.planets` and `TEXTURES` adds it to the scene _and_ the panel. Materials, the ambient light, Earth's cloud shell, Saturn's ring and `CONFIG.simulation.timeScale` (which turns the config's speeds into radians per second, through `simulationStep`) live there too: no number in the code below `CONFIG` is a tuning value.
 - **Loading.** A `THREE.LoadingManager` drives the progress bar (`#loader-bar`, `#loader-status`); `hideLoader()` removes it when every texture has loaded. Texture URLs are built from `import.meta.env.BASE_URL`, which is relative (`./`) in builds. With reduced motion there is no fade and so no `transitionend`, so the loader is removed at once rather than left at opacity 0, where screen readers would still read it.
 - **Structure of a planet.** An orbit pivot (a rotating `Object3D` at the Sun) holds the planet mesh at its distance. Earth has a second, transparent cloud sphere rotating on its own. The Moon has its own pivot on Earth. Saturn gets a ring mesh with a transparent texture.
 - **Animation** is driven by elapsed time, multiplied by the simulation speed, so it is frame-rate independent. Pause sets the speed multiplier to zero and keeps rendering, so the controls still work.
+- **Panel.** `createUI` joins one markup function per section (`headerMarkup`, `planetListMarkup`, `planetInfoMarkup`, `speedControlMarkup`, `actionsMarkup`), then `queryUIElements` collects the elements the code updates and `bindUIEvents` wires them.
 - **Focus and follow.** `focusPlanet` sets `state.followed`, computes where the camera ends relative to the planet (`focusOffset`) and starts `state.flight` (or jumps, with reduced motion). Each frame `updateFollow` either advances the flight (`updateFlight`, eased, towards the planet's current position, controls disabled) or rides along (`rideAlong`: camera and target turned around the Y axis by the angle the planet travelled, then moved with it). `stopFollowing` leaves the camera where it is. `updateFollowUI` keeps `#follow-button` (`aria-pressed`) and the `#follow-status` live region in step.
 - **Picking.** `enablePicking` listens to the canvas. `handlePointerDown`/`handlePointerUp` treat a press and release within `CONFIG.picking.clickTolerance` pixels as a click and call `planetUnder`, which raycasts against every planet's anchor (recursively) and maps the hit to `anchor.userData.planet` through `planetOf`; if nothing is hit, `planetNear` takes the planet whose projected centre is within `CONFIG.picking.nearMiss` pixels. `handleHover` sets the canvas cursor and `title`, once per animation frame.
 - **Unsupported WebGL** shows an explicit message (`showUnsupportedMessage()`) instead of a blank page.
@@ -98,7 +99,7 @@ The jobs are _Lint and types_ (formatting and lint), _Build_ (uploads `dist/`), 
 ## 12. Known limitations
 
 - Circular orbits and stylised sizes and distances (see the roadmap in the README).
-- On a phone the panel covers most of the view, including the middle where a focused planet sits; it cannot be collapsed yet.
+- On a phone the panel covers most of the view, including the middle where a focused planet sits; folding it away is first on the roadmap.
 
 ## House style (identical in every repository of this portfolio)
 
