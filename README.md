@@ -145,6 +145,7 @@ Pushing to `master` runs formatting and lint, then builds the site and runs the 
 
 ## Roadmap
 
+- [ ] A panel that folds away on phones, so the scene and a focused planet stay in view
 - [ ] Planet labels rendered over the canvas
 - [ ] Elliptical orbits and more accurate relative sizes
 - [ ] Bloom and other post-processing on the Sun
