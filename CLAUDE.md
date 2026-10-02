@@ -55,6 +55,7 @@ scripts/         README screenshots
 - **Structure of a planet.** An orbit pivot (a rotating `Object3D` at the Sun) holds the planet mesh at its distance. Earth has a second, transparent cloud sphere rotating on its own. The Moon has its own pivot on Earth. Saturn gets a ring mesh with a transparent texture.
 - **Animation** is driven by elapsed time, multiplied by the simulation speed, so it is frame-rate independent. Pause sets the speed multiplier to zero and keeps rendering, so the controls still work.
 - **Focus and follow.** `focusPlanet` sets `state.followed`, computes where the camera ends relative to the planet (`focusOffset`) and starts `state.flight` (or jumps, with reduced motion). Each frame `updateFollow` either advances the flight (`updateFlight`, eased, towards the planet's current position, controls disabled) or rides along (`rideAlong`: camera and target turned around the Y axis by the angle the planet travelled, then moved with it). `stopFollowing` leaves the camera where it is. `updateFollowUI` keeps `#follow-button` (`aria-pressed`) and the `#follow-status` live region in step.
+- **Picking.** `enablePicking` listens to the canvas. `handlePointerDown`/`handlePointerUp` treat a press and release within `CONFIG.picking.clickTolerance` pixels as a click and call `planetUnder`, which raycasts against every planet's anchor (recursively) and maps the hit to `anchor.userData.planet` through `planetOf`; if nothing is hit, `planetNear` takes the planet whose projected centre is within `CONFIG.picking.nearMiss` pixels. `handleHover` sets the canvas cursor and `title`, once per animation frame.
 - **Unsupported WebGL** shows an explicit message (`showUnsupportedMessage()`) instead of a blank page.
 
 ## 6. Invariants - do not break
@@ -74,7 +75,7 @@ scripts/         README screenshots
 
 ## 8. Testing guide
 
-`e2e/smoke.spec.js`: the textures load and the loader disappears; focusing Saturn updates the panel; pause and speed controls respond. Each test fails on any uncaught error or console error. Assert behaviour and DOM state, not pixels. Following is checked with `centreBrightness()`, the average brightness of a square at the centre of a screenshot (WebGL keeps no drawing buffer to read): high while a planet is followed, low once it is released. Thresholds leave room for night sides and software rendering; transient states such as the flight are checked through the status text, since screenshots of software WebGL are too slow to time.
+`e2e/smoke.spec.js`: the textures load and the loader disappears; focusing Saturn updates the panel; pause and speed controls respond. Each test fails on any uncaught error or console error. Assert behaviour and DOM state, not pixels. Following is checked with `centreBrightness()`, the average brightness of a square at the centre of a screenshot (WebGL keeps no drawing buffer to read): high while a planet is followed, low once it is released. Thresholds leave room for night sides and software rendering; transient states such as the flight are checked through the status text, since screenshots of software WebGL are too slow to time. Scene clicks use `centreOn()`: focus a planet from the panel, stop the planets and release the follow, which leaves the planet in the middle of the view to click, drag or hover; these run on desktop, because on a phone the panel covers the middle.
 
 ## 9. Recipes
 
@@ -97,6 +98,7 @@ The jobs are _Lint and types_ (formatting and lint), _Build_ (uploads `dist/`), 
 ## 12. Known limitations
 
 - Circular orbits and stylised sizes and distances (see the roadmap in the README).
+- On a phone the panel covers most of the view, including the middle where a focused planet sits; it cannot be collapsed yet.
 
 ## House style (identical in every repository of this portfolio)
 
