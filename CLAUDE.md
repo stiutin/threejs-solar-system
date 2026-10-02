@@ -50,9 +50,10 @@ scripts/         README screenshots
 
 ## 5. Architecture
 
-- **`CONFIG` drives everything.** Camera, renderer, controls, focus behaviour, the Sun, stars, orbits, and `CONFIG.planets` (size, distance, speeds, description). The UI planet buttons are built from the same object, so adding a planet to `CONFIG.planets` and `TEXTURES` adds it to the scene _and_ the panel. Materials, the ambient light, Earth's cloud shell, Saturn's ring and `CONFIG.simulation.timeScale` (which turns the config's speeds into radians per second, through `simulationStep`) live there too: no number in the code below `CONFIG` is a tuning value.
+- **`CONFIG` drives everything.** Camera, renderer, controls, focus behaviour, the Sun, stars, orbits, and `CONFIG.planets` (radius in km, J2000 orbital elements, axial tilt, speeds, description), with `CONFIG.scale` turning kilometres and AU into scene units. The UI planet buttons are built from the same object, so adding a planet to `CONFIG.planets` and `TEXTURES` adds it to the scene _and_ the panel. Materials, the ambient light, Earth's cloud shell, Saturn's ring and `CONFIG.simulation.timeScale` (which turns the config's speeds into radians per second, through `simulationStep`) live there too: no number in the code below `CONFIG` is a tuning value.
 - **Loading.** A `THREE.LoadingManager` drives the progress bar (`#loader-bar`, `#loader-status`); `hideLoader()` removes it when every texture has loaded. Texture URLs are built from `import.meta.env.BASE_URL`, which is relative (`./`) in builds. With reduced motion there is no fade and so no `transitionend`, so the loader is removed at once rather than left at opacity 0, where screen readers would still read it.
-- **Structure of a planet.** An orbit pivot (a rotating `Object3D` at the Sun) holds the planet mesh at its distance. Earth has a second, transparent cloud sphere rotating on its own. The Moon has its own pivot on Earth. Saturn gets a ring mesh with a transparent texture.
+- **Structure of a planet.** An anchor `Object3D`, added to the scene in config order, is placed on the planet's ellipse every frame; under it, a tilt group carries the real axial tilt and holds the spinning mesh. Earth has a second, transparent cloud sphere rotating on its own, and the Moon a pivot on the anchor. Saturn's ring is a child of its mesh, so it shares Saturn's tilt.
+- **Orbits.** `orbitGeometry` turns the elements into `semiMajor`, `semiMinor`, `eccentricity`, two plane directions (`towardsPerihelion`, `quarterOnward`) and the J2000 `startingMeanAnomaly`. `updatePlanetRotation` advances `planet.meanAnomaly` by `orbitSpeed` × `simulationStep`, and `placeOnOrbit` solves Kepler's equation (`solveKepler`, Newton's method) and writes the position with `pointOnOrbit`. `createOrbit` traces the line through `pointOnOrbit` too. `sceneRadius` converts kilometres; `planet.radius` holds the result, and nothing reads a radius from the config directly.
 - **Animation** is driven by elapsed time, multiplied by the simulation speed, so it is frame-rate independent. Pause sets the speed multiplier to zero and keeps rendering, so the controls still work.
 - **Panel.** `createUI` puts the header first and wraps every other section (`planetListMarkup`, `planetInfoMarkup`, `labelsControlMarkup`, `speedControlMarkup`, `actionsMarkup`) in `#panel-body`; `queryUIElements` collects what the code updates and `bindUIEvents` wires it. `setPanelFolded` sets `data-folded`, the toggle's `aria-expanded` and text, and the summary; `focusPlanet` folds the panel when `phoneLayout` (the same `width <= 640px` as style.css) matches. The CSS folds only inside that media query.
 - **Focus and follow.** `focusPlanet` sets `state.followed`, computes where the camera ends relative to the planet (`focusOffset`) and starts `state.flight` (or jumps, with reduced motion). Each frame `updateFollow` either advances the flight (`updateFlight`, eased, towards the planet's current position, controls disabled) or rides along (`rideAlong`: camera and target turned around the Y axis by the angle the planet travelled, then moved with it). `stopFollowing` leaves the camera where it is. `updateFollowUI` keeps `#follow-button` (`aria-pressed`) and the `#follow-status` live region in step.
@@ -67,11 +68,12 @@ scripts/         README screenshots
 3. The UI element ids (`#planet-name`, `#pause-button`, `#speed`, `#speed-value`, `#loader`, `#follow-button`, `#follow-status`, `#panel-toggle`, `#panel-summary`, `#labels-toggle`, `.planet-label`) are used by the tests.
 4. Texture credits (CC BY 4.0) stay in the README.
 5. Pixel ratio is capped (`getPixelRatio()`) for performance on HiDPI screens.
+6. **Planets in config order.** `init` registers the planets and adds their anchors to the scene in `CONFIG.planets` order, after every texture has loaded; labels, picking and the panel rely on it. Do not register a planet inside `createPlanet`, where textures decide the order.
 
 ## 7. Conventions (project-specific)
 
 - **One config:** sizes, distances, speeds, colours and counts live in `CONFIG` at the top of `src/main.js`; the scene and the UI are both built from it.
-- **Hierarchy over maths:** motion is composed from pivots (`Object3D`) rather than computed positions.
+- **Real data, one scale:** planets are described in kilometres, AU and degrees, as published; only `CONFIG.scale` and the values marked stylised are choices of this project.
 - **Time:** every animated value is multiplied by the frame delta and the speed multiplier, never by a per-frame constant.
 - **Plain JavaScript:** ES modules, no framework, no UI library; the UI is created in code and styled with plain CSS.
 
@@ -81,7 +83,7 @@ scripts/         README screenshots
 
 ## 9. Recipes
 
-- **Add a planet:** add an entry to `CONFIG.planets` (radius, distance, orbit and rotation speed, description) and a texture in `TEXTURES` and `public/textures/<name>/`, as WebP.
+- **Add a planet:** add an entry to `CONFIG.planets` (radius in km, the six J2000 orbital elements, axial tilt, orbit and rotation speed, description) and a texture in `TEXTURES` and `public/textures/<name>/`, as WebP.
 - **Change the look:** tweak `CONFIG` first; the factories read from it.
 
 ## 10. CI/CD
@@ -99,7 +101,7 @@ The jobs are _Lint and types_ (formatting and lint), _Build_ (uploads `dist/`), 
 
 ## 12. Known limitations
 
-- Circular orbits and stylised sizes and distances (see the roadmap in the README).
+- The Sun's size, the Moon's distance and the orbital and spin speeds are stylised (see How it works in the README); distances are compressed by a square root.
 
 ## House style (identical in every repository of this portfolio)
 
