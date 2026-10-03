@@ -71,7 +71,7 @@ The render loop uses `renderer.setAnimationLoop()`, which lets the browser pause
 
 ### Following a planet
 
-Picking a planet starts a flight of 1.2 seconds, eased in and out. The camera does not aim at where the planet was when the flight began: on every frame it moves towards where the planet is now, so it lands on a moving target. The flight runs on real time, so pausing or speeding up the simulation does not change it, and the orbit controls are switched off until it lands. With reduced motion the camera goes there at once.
+Picking a planet starts a flight of 1.2 seconds, eased in and out, to a point on the planet's sunlit side: 40° around from the Sun's direction and 20° above the orbit, so the planet shows its day side with some shading, wherever the camera came from. The camera does not aim at where the planet was when the flight began: on every frame it moves towards where the planet is now, so it lands on a moving target. The flight runs on real time, so pausing or speeding up the simulation does not change it, and the orbit controls are switched off until it lands. With reduced motion the camera goes there at once.
 
 After landing, the camera rides along. Each frame, the camera and the orbit-controls target are turned around the Sun by the angle the planet travelled and moved with it, so they keep their place relative to both the planet and the Sun. The side of the planet in view, and its lighting, stay as they were, and any angle or zoom picked with the mouse or a finger is kept too. The panel says what the camera is doing ("Flying to Mars…", "The camera follows Mars along its orbit."), and its Follow button stops or restarts the ride.
 
