@@ -67,5 +67,12 @@ await shoot({...devices['Pixel 7'], deviceScaleFactor: 2}, 'mobile', async (page
 
 await browser.close();
 if (server?.pid) {
-  process.kill(-server.pid);
+  try {
+    process.kill(-server.pid);
+  } catch (error) {
+    // The server has already exited, for example because another one held the port; nothing to stop.
+    if (error.code !== 'ESRCH') {
+      throw error;
+    }
+  }
 }
