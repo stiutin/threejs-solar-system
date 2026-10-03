@@ -476,7 +476,12 @@ canvas {
   border-color: var(--color-accent);
 }
 
-.labels-toggle {
+.view-options {
+  display: grid;
+  gap: 10px;
+}
+
+.view-option {
   align-items: center;
   color: var(--color-text-button);
   cursor: pointer;
@@ -485,6 +490,6 @@ canvas {
   gap: 8px;
 }
 
-.labels-toggle input {
+.view-option input {
   accent-color: var(--color-accent);
 }

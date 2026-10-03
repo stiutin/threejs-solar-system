@@ -64,9 +64,11 @@ test('pauses and changes the simulation speed', async ({page}) => {
  * Average brightness (0–765) of a small square at the centre of the view, read from a screenshot: WebGL keeps
  * no drawing buffer to read back. The focused planet fills the centre; empty space is nearly black.
  */
-async function centreBrightness(page) {
+async function centreBrightness(page, offsetX = 0) {
   const {width, height} = page.viewportSize();
-  const shot = await page.screenshot({clip: {x: width / 2 - 15, y: height / 2 - 15, width: 30, height: 30}});
+  const shot = await page.screenshot({
+    clip: {x: width / 2 + offsetX - 15, y: height / 2 - 15, width: 30, height: 30},
+  });
   return page.evaluate(async (base64) => {
     const image = new Image();
     image.src = `data:image/png;base64,${base64}`;
@@ -246,4 +248,24 @@ test('labels name the planets over the scene, focus them when clicked, and can b
   await openPanel(page);
   await page.locator('#labels-toggle').uncheck();
   await expect(labels.first()).toBeHidden();
+});
+
+test('the Sun glows with bloom, and falls back to its halo without it', async ({page}) => {
+  await page.goto('./');
+  await expect(page.locator('#loader')).toBeHidden({timeout: SCENE_TIMEOUT});
+  // Labels near the Sun would be read as light; with the planets still, only the glow changes.
+  await page.locator('#labels-toggle').uncheck();
+  await page.locator('#speed').fill('0');
+  await foldPanel(page);
+
+  // The reset camera looks at the Sun, so it sits in the middle of the view; the glow spreads beside it.
+  const besideTheSun = 60;
+  const withBloom = await centreBrightness(page, besideTheSun);
+
+  await openPanel(page);
+  await page.locator('#bloom-toggle').uncheck();
+  await foldPanel(page);
+  const withoutBloom = await centreBrightness(page, besideTheSun);
+
+  expect(withBloom).toBeGreaterThan(withoutBloom + 20);
 });

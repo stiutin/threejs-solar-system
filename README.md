@@ -27,6 +27,7 @@ Eight textured planets orbit a light-emitting Sun against a procedurally generat
 - Frame-rate independent animation driven by elapsed time
 - Responsive canvas; on a phone the panel folds away once you choose a planet, leaving it in view
 - Planet names float over the scene, follow their planets and focus them when clicked; a checkbox hides them
+- A glowing Sun: selective bloom on the Sun alone, switchable in the panel for slower devices, with a light halo in its place
 - Reduced motion respected: the camera jumps instead of flying, and the loader goes without a fade
 
 ## Tech stack
@@ -81,6 +82,12 @@ A click on the canvas becomes a ray from the camera through the pointer, with `T
 
 The orbit controls use the same pointer, so a click is told apart from a drag: a press and release less than 5 pixels apart picks, anything longer turns the view. Hovering with a mouse shows a pointer and the planet's name, raycasting at most once a frame. Keyboard and screen reader users have the same choice in the panel, which stays the accessible way in.
 
+### Bloom on the Sun
+
+The Sun glows through `UnrealBloomPass`, applied to the Sun alone. The scene is first drawn to the screen as usual, keeping the renderer's own antialiasing and tone mapping. A second `EffectComposer` then renders it again at half resolution with every other object swapped for a black stand-in, so planets passing in front of the Sun still hide it; the bloom pass blurs that into a glow, and a full-screen quad adds it over the frame. Running the whole scene through a composer instead would have lost the antialiasing or cost a multisampled render target on every frame.
+
+The bloom pass clears to black and switches fog off while it runs: left alone, the renderer cleared it with the scene's dark blue, and the blur spread that colour over the whole view. The panel's Sun glow switch turns bloom off for slower devices; the old additive halo then takes its place.
+
 ### Planet labels
 
 The names over the scene are HTML, not geometry. `CSS2DRenderer` from the Three.js addons draws a layer of DOM elements over the canvas and, on every frame, moves each label to where its anchor projects on screen, and hides it when it is behind the camera. Each label hangs from its planet's anchor, a little above the planet (1.6 radii), so it travels along the orbit and never covers the planet itself. Being HTML, the labels stay sharp at any pixel ratio and take a click like any element; the layer itself lets the pointer through to the orbit controls. They are hidden from screen readers, which have the panel's planet list.
@@ -104,9 +111,9 @@ With a relative `base` in `vite.config.js`, the same code works at `/` locally a
 
 ## Testing
 
-| Layer      | Tool       | What it covers                                                                                                                                                                                                                                                                                                                                                                                   |
-| ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| End-to-end | Playwright | the production build on desktop and mobile: loads without errors, controls work, a focused planet stays in view as it orbits and leaves it when released, flight or jump depending on reduced motion, clicking a planet in the scene focuses it while a drag does not, the hover pointer and name, the panel folding on a phone, labels that focus their planet and can be hidden - 10 scenarios |
+| Layer      | Tool       | What it covers                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| End-to-end | Playwright | the production build on desktop and mobile: loads without errors, controls work, a focused planet stays in view as it orbits and leaves it when released, flight or jump depending on reduced motion, clicking a planet in the scene focuses it while a drag does not, the hover pointer and name, the panel folding on a phone, labels that focus their planet and can be hidden, the Sun's bloom against its halo - 11 scenarios |
 
 WebGL output is hard to assert pixel by pixel, so the tests check behaviour instead: no uncaught errors or console messages, the canvas appears, and the controls do what they say. To see whether the camera follows, a test reads the average brightness of the centre of the view from a screenshot: a planet fills it while followed, and empty space takes over once it is released. CI runs the suite against the exact build it deploys.
 
@@ -156,8 +163,12 @@ Pushing to `master` runs formatting and lint, then builds the site and runs the 
 
 ## Roadmap
 
-- [ ] Bloom and other post-processing on the Sun
-- [ ] TypeScript migration
+- [ ] A date control: the planets on any day, from the same orbital elements
+- [ ] The asteroid belt, as one instanced mesh of a few thousand rocks
+- [ ] The largest moons: Jupiter's four Galilean moons and Saturn's Titan
+- [ ] Pluto and Halley's comet on their steep, eccentric orbits, the comet with a tail facing away from the Sun
+- [ ] A true-scale mode for distances, to show how empty the Solar System is
+- [ ] TypeScript, with unit tests for the orbital maths
 
 ## Credits
 

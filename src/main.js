@@ -3,6 +3,9 @@ import './style.css';
 import * as THREE from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
+import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
+import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {CSS2DObject, CSS2DRenderer} from 'three/addons/renderers/CSS2DRenderer.js';
 
 const BASE_URL = import.meta.env.BASE_URL;
@@ -44,6 +47,9 @@ const CONFIG = {
     // Seconds the camera takes to fly to a planet. Real time: pausing or speeding up the simulation does not
     // change it.
     flightDuration: 1.2,
+    // The most of the flight one frame may cover, in seconds, so a flight spans at least a dozen frames. On a
+    // slow device, or after a long frame, an uncapped step would finish it in a frame or two.
+    maxFlightStep: 0.1,
   },
   scene: {
     background: 0x02030a,
@@ -57,6 +63,14 @@ const CONFIG = {
     // Scene units per square root of an AU. The square root keeps the order and the eccentricity of every orbit
     // while bringing Neptune's 30 AU within reach of Mercury's 0.39.
     distance: 9,
+  },
+  bloom: {
+    strength: 0.9,
+    radius: 0.35,
+    // Only the Sun reaches the bloom pass (see renderBloom), so every bright pixel of it may bloom.
+    threshold: 0,
+    // The glow is soft, so rendering it at half resolution looks the same and costs a quarter of the work.
+    resolutionScale: 0.5,
   },
   sun: {
     // Stylised: the true Sun, 109 Earth radii, would swallow the inner planets at this scale. It is still
@@ -313,6 +327,8 @@ const camera = createCamera();
 let renderer = null;
 let controls = null;
 let labelRenderer = null;
+let postProcessing = null;
+let sunGlow = null;
 const timer = new THREE.Timer();
 const planets = new Map();
 const loadingManager = createLoadingManager();
@@ -468,6 +484,10 @@ function createSun() {
   );
   const light = new THREE.PointLight(0xffffff, CONFIG.sun.intensity, 0, 0);
 
+  sun.layers.enable(BLOOM_LAYER);
+  // The additive halo stands in for bloom when bloom is switched off.
+  glow.visible = false;
+  sunGlow = glow;
   sun.add(glow);
   sun.add(light);
   scene.add(sun);
@@ -840,6 +860,9 @@ function focusPlanet(name) {
       fromCamera: camera.position.clone(),
       fromTarget: controls.target.clone(),
       offset,
+      // The planet keeps orbiting during the flight; the offset turns with it, so the camera still lands on
+      // the sunlit side however far the planet has gone.
+      startAngle: orbitAngle(followPosition),
       elapsed: 0,
     };
     // The controls would pull against the flight; they take over again when it lands.
@@ -862,11 +885,15 @@ const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 /
 function updateFlight(delta, planetPosition) {
   const flight = state.flight;
 
-  flight.elapsed += delta;
+  flight.elapsed += Math.min(delta, CONFIG.focus.maxFlightStep);
   const progress = easeInOutCubic(Math.min(flight.elapsed / CONFIG.focus.flightDuration, 1));
 
   controls.target.lerpVectors(flight.fromTarget, planetPosition, progress);
-  camera.position.lerpVectors(flight.fromCamera, flightEnd.copy(planetPosition).add(flight.offset), progress);
+  flightEnd
+    .copy(flight.offset)
+    .applyAxisAngle(ORBIT_AXIS, flight.startAngle - orbitAngle(planetPosition))
+    .add(planetPosition);
+  camera.position.lerpVectors(flight.fromCamera, flightEnd, progress);
 
   if (progress < 1) {
     return;
@@ -1044,6 +1071,144 @@ function handleHover(event) {
   });
 }
 
+// Objects on this layer glow; everything else is drawn black while the bloom is rendered.
+const BLOOM_LAYER = 1;
+const bloomLayer = new THREE.Layers();
+bloomLayer.set(BLOOM_LAYER);
+
+// Stand-ins that hide everything but the Sun from the bloom pass while still hiding the Sun where a planet
+// passes in front of it.
+const DARK_MATERIALS = {
+  mesh: new THREE.MeshBasicMaterial({color: 0x000000}),
+  points: new THREE.PointsMaterial({color: 0x000000}),
+  line: new THREE.LineBasicMaterial({color: 0x000000}),
+};
+const stashedMaterials = new Map();
+const BLOOM_BACKGROUND = new THREE.Color(0x000000);
+
+/** Adds the blurred glow over what is already on screen. */
+const BLOOM_OVERLAY_SHADER = {
+  uniforms: {bloomTexture: {value: null}},
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = vec4(position.xy, 0.0, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D bloomTexture;
+    varying vec2 vUv;
+    void main() {
+      gl_FragColor = texture2D(bloomTexture, vUv);
+    }
+  `,
+};
+
+/**
+ * Selective bloom. The scene is drawn to the screen as usual, with the renderer's own antialiasing and tone
+ * mapping. A composer then renders it again at half resolution with everything but the Sun drawn black,
+ * blurs that into a glow, and a full-screen quad adds the glow on top. Rendering the scene itself through a
+ * composer would lose the antialiasing, or cost a multisampled render target on every frame.
+ */
+function createPostProcessing() {
+  const width = window.innerWidth * CONFIG.bloom.resolutionScale;
+  const height = window.innerHeight * CONFIG.bloom.resolutionScale;
+  const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(width, height),
+    CONFIG.bloom.strength,
+    CONFIG.bloom.radius,
+    CONFIG.bloom.threshold
+  );
+  const bloomComposer = new EffectComposer(renderer);
+
+  bloomComposer.renderToScreen = false;
+  bloomComposer.setPixelRatio(1);
+  bloomComposer.setSize(width, height);
+  bloomComposer.addPass(new RenderPass(scene, camera));
+  bloomComposer.addPass(bloomPass);
+
+  const overlay = new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 2),
+    new THREE.ShaderMaterial({
+      ...BLOOM_OVERLAY_SHADER,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+    })
+  );
+
+  overlay.material.uniforms.bloomTexture.value = bloomComposer.renderTarget2.texture;
+  overlay.frustumCulled = false;
+
+  const overlayScene = new THREE.Scene();
+
+  overlayScene.add(overlay);
+
+  return {enabled: true, bloomComposer, bloomPass, overlayScene, overlayCamera: new THREE.OrthographicCamera()};
+}
+
+function darkenForBloom(object) {
+  if (!object.material || bloomLayer.test(object.layers)) {
+    return;
+  }
+
+  stashedMaterials.set(object, object.material);
+  if (object.isPoints) {
+    object.material = DARK_MATERIALS.points;
+  } else if (object.isLine) {
+    object.material = DARK_MATERIALS.line;
+  } else {
+    object.material = DARK_MATERIALS.mesh;
+  }
+}
+
+function restoreAfterBloom(object) {
+  const material = stashedMaterials.get(object);
+
+  if (material) {
+    object.material = material;
+    stashedMaterials.delete(object);
+  }
+}
+
+/**
+ * Renders the glow: the scene with only the Sun lit, on black, blurred. The background is set to black rather
+ * than removed, because the renderer would otherwise clear with the colour it last used, the scene's dark blue,
+ * and the blur would spread that over the whole view; fog would tint the black stand-ins the same way.
+ */
+function renderBloom() {
+  const {background, fog} = scene;
+
+  scene.background = BLOOM_BACKGROUND;
+  scene.fog = null;
+  scene.traverse(darkenForBloom);
+  postProcessing.bloomComposer.render();
+  scene.traverse(restoreAfterBloom);
+  scene.background = background;
+  scene.fog = fog;
+}
+
+function renderScene() {
+  renderer.render(scene, camera);
+
+  if (!postProcessing.enabled) {
+    return;
+  }
+
+  renderBloom();
+  renderer.autoClear = false;
+  renderer.render(postProcessing.overlayScene, postProcessing.overlayCamera);
+  renderer.autoClear = true;
+}
+
+/** Switches bloom on or off; without it, the additive halo around the Sun stands in. */
+function setBloom(enabled) {
+  postProcessing.enabled = enabled;
+  sunGlow.visible = !enabled;
+}
+
 /** The layer that draws HTML labels over the canvas, in step with the WebGL scene. */
 function createLabelRenderer() {
   const labels = new CSS2DRenderer();
@@ -1185,13 +1350,17 @@ function planetInfoMarkup() {
 }
 
 /** The simulation speed slider. */
-/** Whether the names of the planets float over the scene. */
-function labelsControlMarkup() {
+/** Display options: the labels over the scene and the Sun's bloom, which slower devices may want off. */
+function viewOptionsMarkup() {
   return `
-    <div class="ui__section">
-      <label class="labels-toggle">
+    <div class="ui__section view-options">
+      <label class="view-option">
         <input id="labels-toggle" type="checkbox" checked />
         <span>Planet labels</span>
+      </label>
+      <label class="view-option">
+        <input id="bloom-toggle" type="checkbox" checked />
+        <span>Sun glow (bloom)</span>
       </label>
     </div>
   `;
@@ -1244,7 +1413,7 @@ function createUI() {
   const ui = document.createElement('aside');
 
   ui.className = 'ui';
-  const body = [planetListMarkup(), planetInfoMarkup(), labelsControlMarkup(), speedControlMarkup(), actionsMarkup()];
+  const body = [planetListMarkup(), planetInfoMarkup(), viewOptionsMarkup(), speedControlMarkup(), actionsMarkup()];
 
   // Everything but the header folds away on a phone; on wider screens the panel is always open.
   ui.innerHTML = `${headerMarkup()}<div id="panel-body" class="ui__body">${body.join('')}</div>`;
@@ -1269,6 +1438,7 @@ function queryUIElements(ui) {
     panelToggle: ui.querySelector('#panel-toggle'),
     panelSummary: ui.querySelector('#panel-summary'),
     labelsToggle: ui.querySelector('#labels-toggle'),
+    bloomToggle: ui.querySelector('#bloom-toggle'),
   };
 }
 
@@ -1291,6 +1461,9 @@ function bindUIEvents() {
   uiElements.speedInput.addEventListener('input', handleSpeedChange);
   uiElements.panelToggle.addEventListener('click', () => {
     setPanelFolded(!uiElements.panel.hasAttribute('data-folded'));
+  });
+  uiElements.bloomToggle.addEventListener('change', (event) => {
+    setBloom(event.target.checked);
   });
   uiElements.labelsToggle.addEventListener('change', (event) => {
     labelRenderer.domElement.hidden = !event.target.checked;
@@ -1363,6 +1536,15 @@ function resize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(getPixelRatio());
   labelRenderer.setSize(window.innerWidth, window.innerHeight);
+  resizePostProcessing();
+}
+
+function resizePostProcessing() {
+  const width = window.innerWidth * CONFIG.bloom.resolutionScale;
+  const height = window.innerHeight * CONFIG.bloom.resolutionScale;
+
+  postProcessing.bloomComposer.setSize(width, height);
+  postProcessing.bloomPass.resolution.set(width, height);
 }
 
 function animate() {
@@ -1373,7 +1555,7 @@ function animate() {
   animatePlanets(delta);
   updateFollow(delta);
   controls.update();
-  renderer.render(scene, camera);
+  renderScene();
   labelRenderer.render(scene, camera);
 }
 
@@ -1391,6 +1573,7 @@ async function init() {
   createAmbientLight();
   createSun();
   createStars();
+  postProcessing = createPostProcessing();
 
   // The Sun and the star field need no textures, so rendering can start
   // immediately and the planets appear as their textures resolve.
