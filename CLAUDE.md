@@ -109,7 +109,9 @@ The jobs are _Lint and types_ (formatting and lint), _Build_ (uploads `dist/`), 
 
 These six repositories are written as one body of work: [cosmos-stories](https://github.com/stiutin/cosmos-stories), [larder](https://github.com/stiutin/larder), [livery](https://github.com/stiutin/livery), [pixi-neon-district](https://github.com/stiutin/pixi-neon-district), [threejs-solar-system](https://github.com/stiutin/threejs-solar-system) and [threejs-icosphere](https://github.com/stiutin/threejs-icosphere). Keep them alike. When a convention changes, change it everywhere.
 
-**Shared files.** `LICENSE` (MIT, Serge Tiutin), `.editorconfig`, `.gitattributes`, `.nvmrc` (`24`), `.prettierrc`, `.prettierignore`, `.gitignore`, `.vscode/`, `.github/dependabot.yml` and the issue and PR templates are identical across the repositories, apart from a clearly marked `# Project` block at the end of the ignore files.
+**Shared files.** `LICENSE` (MIT, Serge Tiutin), `.editorconfig`, `.gitattributes`, `.nvmrc` (`24`), `.prettierrc`, `.prettierignore`, `.gitignore`, `.vscode/` and the issue and PR templates are identical across the repositories, apart from a clearly marked `# Project` block at the end of the ignore files.
+
+**Dependencies.** Updated by hand, never by Dependabot pull requests, so every commit has a person as its author. Once a month: `npm outdated`, then `npm update` for minor and patch versions, and majors one at a time with their migration (`ng update` for Angular, typescript-eslint together with TypeScript); the action versions in the workflows are checked at the same time. Each update is one `chore: update dependencies` commit that passes CI. Dependabot alerts stay on in the repository settings, to flag known vulnerabilities; Dependabot security updates stay off.
 
 **Formatting.** Prettier: 120 columns, single quotes, no spaces inside braces (`{a, b}`), trailing commas where ES5 allows them, always parenthesised arrow parameters. `npm run format` fixes everything, and `npm run format:check` runs in CI. ESLint does not format.
 
