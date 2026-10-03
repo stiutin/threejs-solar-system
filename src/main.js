@@ -34,6 +34,10 @@ const CONFIG = {
   focus: {
     // Camera distance when focusing a planet, as a multiple of its radius.
     distanceFactor: 6,
+    // Where the camera looks at a focused planet from: this many degrees around from the Sun's direction, and
+    // this many above the orbital plane.
+    sideAngle: 40,
+    elevation: 20,
     minDistance: 0.6,
     // How close the user may then zoom in, as a multiple of the radius.
     clearanceFactor: 2.5,
@@ -786,19 +790,21 @@ function formatPlanetName(name) {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-/** Where the camera sits relative to a planet when it focuses on it: on its current side, at a set distance. */
+/**
+ * Where the camera sits relative to a planet when it focuses on it: on the sunlit side, turned a little away
+ * from the Sun and raised above the orbit, so the planet shows its day side with some shading rather than a
+ * flat disc. Approaching from wherever the camera happened to be could land it on the night side, where the
+ * planet is a black circle.
+ */
 function focusOffset(planet, planetPosition) {
-  const direction = new THREE.Vector3().subVectors(camera.position, planetPosition);
-
-  // Guard against the camera sitting exactly on the planet, which would
-  // normalize to a zero vector and put NaN into the camera position.
-  if (direction.lengthSq() === 0) {
-    direction.set(0, 0.4, 1);
-  }
-
+  const towardsSun = new THREE.Vector3().sub(planetPosition).setY(0).normalize();
+  const direction = towardsSun
+    .applyAxisAngle(ORBIT_AXIS, THREE.MathUtils.degToRad(CONFIG.focus.sideAngle))
+    .setY(Math.tan(THREE.MathUtils.degToRad(CONFIG.focus.elevation)))
+    .normalize();
   const distance = Math.max(planet.radius * CONFIG.focus.distanceFactor, CONFIG.focus.minDistance);
 
-  return direction.normalize().multiplyScalar(distance);
+  return direction.multiplyScalar(distance);
 }
 
 /**
